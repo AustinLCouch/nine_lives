@@ -360,3 +360,23 @@ fn update_cell_text(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grid_size_is_9() {
+        assert_eq!(GRID_SIZE, 9);
+    }
+
+    #[test]
+    fn board_cells_default_none() {
+        let board = BoardState { cells: [[None; GRID_SIZE]; GRID_SIZE] };
+        assert!(board
+            .cells
+            .iter()
+            .flatten()
+            .all(|c| c.is_none()));
+    }
+}

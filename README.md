@@ -37,9 +37,9 @@ A delightful cat-themed Sudoku game built with Rust and Bevy! Each number (1-9) 
 
 ## Technical Details
 
-- **Engine**: Bevy 0.14
+- **Engine**: Bevy 0.16.1
 - **Language**: Rust
-- **Platform**: Desktop (Mac/PC), with web export support
+- **Platform**: Desktop (macOS/Windows/Linux). Web export is not configured in this repo; enabling it will require additional setup (e.g., Trunk and a wasm build pipeline).
 - **UI**: Bevy's built-in UI system with responsive layout
 - **Typography**: MonoLisa font for enhanced readability and style
 
