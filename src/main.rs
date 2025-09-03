@@ -372,11 +372,9 @@ mod tests {
 
     #[test]
     fn board_cells_default_none() {
-        let board = BoardState { cells: [[None; GRID_SIZE]; GRID_SIZE] };
-        assert!(board
-            .cells
-            .iter()
-            .flatten()
-            .all(|c| c.is_none()));
+        let board = BoardState {
+            cells: [[None; GRID_SIZE]; GRID_SIZE],
+        };
+        assert!(board.cells.iter().flatten().all(|c| c.is_none()));
     }
 }
