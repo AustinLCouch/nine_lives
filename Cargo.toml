@@ -7,4 +7,4 @@ edition = "2024"
 bevy = "0.16.1"
 
 # This line links our main application to its logic crate.
-nine_lives_logic = { path = "../nine_lives_logic" }
+nine_lives_logic = { path = "nine_lives_logic" }

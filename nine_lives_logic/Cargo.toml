@@ -1,0 +1,8 @@
+[package]
+name = "nine_lives_logic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# We need Bevy for the Resource trait - using minimal features
+bevy = { version = "0.16.1", default-features = false }
