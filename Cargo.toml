@@ -1,10 +1,11 @@
-[package]
-name = "nine_lives"
-version = "0.1.0"
-edition = "2024"
+# nine_lives/Cargo.toml
+[workspace]
+members = [
+    "nine_lives_core",
+    "nine_lives_ui", 
+    "nine_lives_controller",
+]
+resolver = "2"
 
-[dependencies]
-bevy = "0.16.1"
-
-# This line links our main application to its logic crate.
-nine_lives_logic = { path = "nine_lives_logic" }
+[workspace.dependencies]
+bevy = { version = "0.16.1", default-features = false }

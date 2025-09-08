@@ -1,11 +1,11 @@
-/// File:  nine_lives_workspace/nine_lives_logic/src/lib.rs
-/// Author: Austin Couch
-/// File Description:
-///     This crate contains the core game logic for Nine Lives Cat Sudoku.
-///     It is completely independent of the Bevy game engine and handles
-///     the state of the game board and the rules for interacting with it.
+//! Nine Lives Cat Sudoku Core Logic
+//!
+//! This crate contains the pure game logic for Nine Lives Cat Sudoku.
+//! It is independent of any specific UI framework and handles:
+//! - Game board representation and state
+//! - Core game rules and algorithms  
+//! - Board validation and manipulation
 
-// Import the Resource trait from Bevy for the BoardState struct
 use bevy::prelude::Resource;
 
 /// The size of one dimension of the Sudoku grid (e.g., 9 for a 9x9 grid).
@@ -60,5 +60,44 @@ impl BoardState {
 impl Default for BoardState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_board_creation() {
+        let board = BoardState::new();
+        assert_eq!(board.cells[0][0], None);
+        assert_eq!(board.cells[8][8], None);
+    }
+
+    #[test]
+    fn test_cycle_cell() {
+        let mut board = BoardState::new();
+        board.cycle_cell(0, 0, 3);
+        assert_eq!(board.cells[0][0], Some(0));
+        
+        board.cycle_cell(0, 0, 3);
+        assert_eq!(board.cells[0][0], Some(1));
+        
+        board.cycle_cell(0, 0, 3);
+        assert_eq!(board.cells[0][0], Some(2));
+        
+        board.cycle_cell(0, 0, 3);
+        assert_eq!(board.cells[0][0], Some(0));
+    }
+
+    #[test]
+    fn test_clear_board() {
+        let mut board = BoardState::new();
+        board.cycle_cell(1, 1, 5);
+        board.cycle_cell(2, 3, 5);
+        
+        board.clear();
+        assert_eq!(board.cells[1][1], None);
+        assert_eq!(board.cells[2][3], None);
     }
 }
