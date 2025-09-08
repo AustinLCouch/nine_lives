@@ -42,6 +42,22 @@ pub enum AppState {
     Ready,
 }
 
+// --- Helper Functions ---
+
+/// Returns the background color for a cell based on its position
+/// Creates a visual distinction between the 3x3 sudoku boxes
+fn get_cell_background_color(row: usize, col: usize) -> Color {
+    let box_row = row / 3;
+    let box_col = col / 3;
+    
+    // Alternate colors for the 3x3 boxes to make them visually distinct
+    if (box_row + box_col) % 2 == 0 {
+        Color::srgb(0.9, 0.9, 0.9)  // Light gray
+    } else {
+        Color::srgb(0.8, 0.8, 0.8)  // Slightly darker gray
+    }
+}
+
 // --- UI Systems ---
 
 /// A system that loads the cat ASCII art into the `CatEmojis` resource.
@@ -77,25 +93,125 @@ pub fn update_cell_text(
                 };
 
                 // Only update the text if it has actually changed.
-                if **text != new_text_value {
-                    **text = new_text_value;
+                if text.0 != new_text_value {
+                    text.0 = new_text_value;
                 }
             }
         }
     }
 }
 
-/// A simple placeholder system to get the game running with basic functionality
+/// System that creates the visual 9x9 sudoku grid with clickable cells
 pub fn setup_grid(mut commands: Commands) {
-    // Just spawn a camera for now - we'll add UI later once compilation works
+    // Spawn the camera
     commands.spawn(Camera2d);
 
-    // Print to console to show the game is working
-    println!("Nine Lives Cat Sudoku is starting up!");
-    println!(
-        "Game board initialized with {} x {} grid",
-        GRID_SIZE, GRID_SIZE
-    );
+    // Create the main UI root node
+    commands
+        .spawn(Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            flex_direction: FlexDirection::Column,
+            ..default()
+        })
+        .with_children(|parent| {
+            // Title
+            parent.spawn((
+                Text::new("Nine Lives: Cat Sudoku"),
+                TextFont {
+                    font_size: 32.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                Node {
+                    margin: UiRect::bottom(Val::Px(20.0)),
+                    ..default()
+                },
+            ));
+
+            // Game grid container
+            parent
+                .spawn((
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: RepeatedGridTrack::flex(9, 1.0),
+                        grid_template_rows: RepeatedGridTrack::flex(9, 1.0),
+                        column_gap: Val::Px(2.0),
+                        row_gap: Val::Px(2.0),
+                        width: Val::Px(580.0),
+                        height: Val::Px(580.0),
+                        padding: UiRect::all(Val::Px(10.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                ))
+                .with_children(|grid_parent| {
+                    // Create 9x9 grid of cells
+                    for row in 0..GRID_SIZE {
+                        for col in 0..GRID_SIZE {
+                            grid_parent
+                                .spawn((
+                                    Button,
+                                    Cell { row, col },
+                                    Node {
+                                        width: Val::Px(60.0),
+                                        height: Val::Px(60.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::all(Val::Px(1.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(get_cell_background_color(row, col)),
+                                    BorderColor(Color::srgb(0.4, 0.4, 0.4)),
+                                ))
+                                .with_children(|cell_parent| {
+                                    // Text node for displaying the cat emoji/ascii
+                                    cell_parent.spawn((
+                                        Text::new(" "),
+                                        TextFont {
+                                            font_size: 12.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::BLACK),
+                                    ));
+                                });
+                        }
+                    }
+                });
+
+            // Clear button
+            parent
+                .spawn((
+                    Button,
+                    ClearButton,
+                    Node {
+                        width: Val::Px(150.0),
+                        height: Val::Px(40.0),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        margin: UiRect::top(Val::Px(20.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.6, 0.3, 0.3)),
+                    BorderColor(Color::srgb(0.8, 0.4, 0.4)),
+                ))
+                .with_children(|button_parent| {
+                    button_parent.spawn((
+                        Text::new("Clear Board"),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+        });
+
+    println!("Nine Lives Cat Sudoku UI initialized!");
 }
 
 /// A system that transitions the app from `Loading` to `Ready` once resources are loaded.
@@ -121,10 +237,10 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 (
-                    update_cell_text.run_if(resource_changed::<BoardState>),
-                    transition_to_ready,
-                )
-                    .run_if(in_state(AppState::Ready)),
+                    update_cell_text.run_if(resource_changed::<BoardState>)
+                        .run_if(in_state(AppState::Ready)),
+                    transition_to_ready.run_if(in_state(AppState::Loading)),
+                ),
             );
     }
 }
