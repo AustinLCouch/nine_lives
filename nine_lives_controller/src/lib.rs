@@ -1,16 +1,16 @@
-//! Nine Lives Cat Sudoku Controller Layer
-//!
-//! This crate contains the controller logic for the Nine Lives Cat Sudoku game.
-//! It orchestrates the interaction between the core game logic and the UI layer.
-//! Responsibilities:
-//! - Event handling (user input)
-//! - Game state transitions
-//! - Application orchestration
-//! - Connecting model and view layers
+/// Nine Lives Cat Sudoku Controller Layer
+///
+/// This crate contains the controller logic for the Nine Lives Cat Sudoku game.
+///It orchestrates the interaction between the core game logic and the UI layer.
+/// Responsibilities:
+/// - Event handling (user input)
+/// - Game state transitions
+/// - Application orchestration
+/// - Connecting model and view layers
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GameState};
-use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton};
+use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint};
+use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton, UndoButton, RedoButton, HintButton};
 
 // --- Controller Systems ---
 
@@ -19,12 +19,18 @@ pub fn cell_click_system(
     mut interaction_query: Query<(&Interaction, &Cell), Changed<Interaction>>,
     cat_emojis: Res<CatEmojis>,
     mut board: ResMut<BoardState>, // We get mutable access to the game state.
+    mut session: ResMut<GameSession>,
+    mut history: ResMut<GameHistory>,
 ) {
     for (interaction, cell) in &mut interaction_query {
         if *interaction == Interaction::Pressed {
-            // The Bevy system calls the method on the BoardState to update the game state.
-            // The logic for *how* to cycle is neatly contained in the core crate.
-            board.cycle_cell(cell.row, cell.col, cat_emojis.emojis.len());
+            // Try to cycle the cell and track the move in history
+            if let Some(game_move) = board.cycle_cell(cell.row, cell.col, cat_emojis.emojis.len()) {
+                // Add move to history for undo/redo
+                history.add_move(game_move);
+                // Track move count in the session
+                session.increment_move();
+            }
         }
     }
 }
@@ -46,12 +52,179 @@ pub fn clear_button_system(
 pub fn new_game_button_system(
     mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<NewGameButton>)>,
     mut board: ResMut<BoardState>,
+    mut session: ResMut<GameSession>,
+    mut history: ResMut<GameHistory>,
+    mut solution: ResMut<Solution>,
+    mut hint_system: ResMut<HintSystem>,
 ) {
     for interaction in &mut interaction_query {
         if *interaction == Interaction::Pressed {
-            // Generate a new easy puzzle (perfect for beginners)
-            board.generate_easy_puzzle();
+            // Generate a new easy puzzle and store the solution
+            *solution = board.generate_easy_puzzle();
+            // Reset the session timer and move counter
+            session.reset();
+            // Clear move history
+            history.clear();
+            // Reset hints (3 hints for easy puzzles)
+            hint_system.reset(3);
             println!("Generated new puzzle!");
+        }
+    }
+}
+
+/// System that handles clicks on the "Undo" button.
+pub fn undo_button_system(
+    mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<UndoButton>)>,
+    mut board: ResMut<BoardState>,
+    mut history: ResMut<GameHistory>,
+) {
+    for interaction in &mut interaction_query {
+        if *interaction == Interaction::Pressed {
+            if let Some(game_move) = history.peek_undo().cloned() {
+                // Apply the reverse of the move
+                board.undo_move(&game_move);
+                // Mark as undone in history
+                history.mark_undone();
+                println!("Undid move at ({}, {})", game_move.row, game_move.col);
+            }
+        }
+    }
+}
+
+/// System that handles clicks on the "Redo" button.
+pub fn redo_button_system(
+    mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<RedoButton>)>,
+    mut board: ResMut<BoardState>,
+    mut history: ResMut<GameHistory>,
+) {
+    for interaction in &mut interaction_query {
+        if *interaction == Interaction::Pressed {
+            if let Some(game_move) = history.peek_redo().cloned() {
+                // Reapply the move
+                board.apply_move(&game_move);
+                // Mark as redone in history
+                history.mark_redone();
+                println!("Redid move at ({}, {})", game_move.row, game_move.col);
+            }
+        }
+    }
+}
+
+/// System that handles clicks on the "Hint" button.
+pub fn hint_button_system(
+    mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<HintButton>)>,
+    mut board: ResMut<BoardState>,
+    solution: Res<Solution>,
+    mut hint_system: ResMut<HintSystem>,
+    debug_mode: Res<DebugMode>,
+) {
+    for interaction in &mut interaction_query {
+        if *interaction == Interaction::Pressed {
+            if hint_system.use_hint(&debug_mode) {
+                if let Some((row, col, correct_value)) = get_next_hint(&board, &solution) {
+                    // Apply the hint directly to the board
+                    board.cells[row][col] = Some(correct_value);
+                    board.cell_types[row][col] = Some(nine_lives_core::CellType::Player);
+                    
+                    if debug_mode.unlimited_hints {
+                        println!(
+                            "DEBUG HINT: Placed cat #{} at ({}, {}). [Unlimited hints enabled]",
+                            correct_value + 1,
+                            row + 1,
+                            col + 1
+                        );
+                    } else {
+                        println!(
+                            "Hint: Placed cat #{} at ({}, {}). {} hints remaining.",
+                            correct_value + 1,
+                            row + 1,
+                            col + 1,
+                            hint_system.hints_remaining
+                        );
+                    }
+                } else {
+                    println!("No hints available - puzzle may be complete!");
+                }
+            } else {
+                println!("No hints remaining!");
+            }
+        }
+    }
+}
+
+/// System to handle debug mode toggle (Cmd+D or Ctrl+D).
+pub fn debug_mode_system(
+    input: Res<ButtonInput<KeyCode>>,
+    mut debug_mode: ResMut<DebugMode>,
+) {
+    let cmd_pressed = input.pressed(KeyCode::SuperLeft) || input.pressed(KeyCode::SuperRight);
+    let ctrl_pressed = input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::ControlRight);
+    
+    // Use Cmd on Mac, Ctrl on other platforms
+    let modifier_pressed = if cfg!(target_os = "macos") {
+        cmd_pressed
+    } else {
+        ctrl_pressed
+    };
+    
+    if modifier_pressed && input.just_pressed(KeyCode::KeyD) {
+        debug_mode.toggle_unlimited_hints();
+        if debug_mode.unlimited_hints {
+            println!("🐛=== DEBUG MODE ACTIVATED ===");
+            println!("   • Unlimited hints enabled");
+            println!("   • Perfect for testing and solving puzzles");
+            println!("   • Press ⌘D/Ctrl+D again to disable");
+            println!("================================");
+        } else {
+            println!("✅=== DEBUG MODE DISABLED ===");
+            println!("   • Back to normal gameplay");
+            println!("   • Limited hints restored");
+            println!("===============================");
+        }
+    }
+}
+
+/// System to handle keyboard shortcuts (Undo: Cmd+Z, Redo: Cmd+Shift+Z).
+pub fn keyboard_shortcuts_system(
+    input: Res<ButtonInput<KeyCode>>,
+    mut board: ResMut<BoardState>,
+    mut history: ResMut<GameHistory>,
+) {
+    let cmd_pressed = input.pressed(KeyCode::SuperLeft) || input.pressed(KeyCode::SuperRight);
+    let ctrl_pressed = input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::ControlRight);
+    let shift_pressed = input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight);
+    
+    // Use Cmd on Mac, Ctrl on other platforms
+    let modifier_pressed = if cfg!(target_os = "macos") {
+        cmd_pressed
+    } else {
+        ctrl_pressed
+    };
+    
+    if modifier_pressed && input.just_pressed(KeyCode::KeyZ) {
+        if shift_pressed {
+            // Redo (Cmd+Shift+Z or Ctrl+Shift+Z)
+            if let Some(game_move) = history.peek_redo().cloned() {
+                board.apply_move(&game_move);
+                history.mark_redone();
+                println!("Keyboard: Redid move at ({}, {})", game_move.row, game_move.col);
+            }
+        } else {
+            // Undo (Cmd+Z or Ctrl+Z)
+            if let Some(game_move) = history.peek_undo().cloned() {
+                board.undo_move(&game_move);
+                history.mark_undone();
+                println!("Keyboard: Undid move at ({}, {})", game_move.row, game_move.col);
+            }
+        }
+    }
+    
+    // Alternative Redo shortcut: Cmd+Y or Ctrl+Y
+    if modifier_pressed && input.just_pressed(KeyCode::KeyY) {
+        if let Some(game_move) = history.peek_redo().cloned() {
+            board.apply_move(&game_move);
+            history.mark_redone();
+            println!("Keyboard: Redid move at ({}, {})", game_move.row, game_move.col);
         }
     }
 }
@@ -97,6 +270,11 @@ pub fn run_game() {
         // Initialize the core game state from the model layer
         .init_resource::<BoardState>()
         .init_resource::<GameState>()
+        .init_resource::<GameSession>()
+        .init_resource::<GameHistory>()
+        .init_resource::<Solution>()
+        .init_resource::<HintSystem>()
+        .init_resource::<DebugMode>()
         // Add the UI layer (view)
         .add_plugins(nine_lives_ui::UiPlugin)
         // Add controller systems
@@ -106,6 +284,11 @@ pub fn run_game() {
                 cell_click_system,
                 clear_button_system,
                 new_game_button_system,
+                undo_button_system,
+                redo_button_system,
+                hint_button_system,
+                keyboard_shortcuts_system,
+                debug_mode_system,
                 game_state_system,
             )
                 .run_if(in_state(AppState::Ready)),
@@ -116,7 +299,6 @@ pub fn run_game() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nine_lives_core::GRID_SIZE;
 
     #[test]
     fn test_controller_systems() {

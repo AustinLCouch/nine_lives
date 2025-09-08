@@ -8,7 +8,7 @@
 //! - Application states
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GRID_SIZE, GameState};
+use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession, HintSystem, DebugMode};
 use std::collections::HashSet;
 
 // --- UI Components ---
@@ -28,6 +28,36 @@ pub struct ClearButton;
 #[derive(Component)]
 pub struct NewGameButton;
 
+/// A component to tag the timer display.
+#[derive(Component)]
+pub struct TimerDisplay;
+
+/// A component to tag the move counter display.
+#[derive(Component)]
+pub struct MoveCounterDisplay;
+
+/// A component to tag the undo button.
+#[derive(Component)]
+pub struct UndoButton;
+
+/// A component to tag the redo button.
+#[derive(Component)]
+pub struct RedoButton;
+
+/// A component to tag the hint button.
+#[derive(Component)]
+pub struct HintButton;
+
+/// A component to tag the debug status display.
+#[derive(Component)]
+pub struct DebugStatusDisplay;
+
+/// Component to mark a cell as currently hinted (for pulsing animation).
+#[derive(Component)]
+pub struct HintedCell {
+    pub timer: Timer,
+}
+
 // --- UI Resources ---
 
 /// A Bevy resource that holds the ASCII art for the cats.
@@ -35,6 +65,62 @@ pub struct NewGameButton;
 #[derive(Resource)]
 pub struct CatEmojis {
     pub emojis: Vec<String>,
+}
+
+/// Theme system for visual customization.
+#[derive(Resource, Clone, Debug)]
+pub struct Theme {
+    pub name: String,
+    pub primary_color: Color,
+    pub secondary_color: Color,
+    pub accent_color: Color,
+    pub text_color: Color,
+    pub grid_background: Color,
+    pub cell_highlight_color: Color,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self::classic()
+    }
+}
+
+impl Theme {
+    pub fn classic() -> Self {
+        Self {
+            name: "Classic".to_string(),
+            primary_color: Color::srgb(0.9, 0.9, 0.9),
+            secondary_color: Color::srgb(0.8, 0.8, 0.8),
+            accent_color: Color::srgb(0.2, 0.6, 1.0),
+            text_color: Color::WHITE,
+            grid_background: Color::srgb(0.2, 0.2, 0.2),
+            cell_highlight_color: Color::srgb(0.3, 0.7, 1.0),
+        }
+    }
+
+    pub fn dark() -> Self {
+        Self {
+            name: "Dark".to_string(),
+            primary_color: Color::srgb(0.3, 0.3, 0.3),
+            secondary_color: Color::srgb(0.2, 0.2, 0.2),
+            accent_color: Color::srgb(0.8, 0.4, 0.2),
+            text_color: Color::srgb(0.9, 0.9, 0.9),
+            grid_background: Color::srgb(0.1, 0.1, 0.1),
+            cell_highlight_color: Color::srgb(0.6, 0.3, 0.1),
+        }
+    }
+
+    pub fn high_contrast() -> Self {
+        Self {
+            name: "High Contrast".to_string(),
+            primary_color: Color::srgb(1.0, 1.0, 1.0),
+            secondary_color: Color::srgb(0.8, 0.8, 0.8),
+            accent_color: Color::srgb(0.0, 0.0, 1.0),
+            text_color: Color::BLACK,
+            grid_background: Color::BLACK,
+            cell_highlight_color: Color::srgb(0.0, 0.5, 1.0),
+        }
+    }
 }
 
 // --- Application States ---
@@ -49,21 +135,26 @@ pub enum AppState {
 
 // --- Helper Functions ---
 
-/// Returns the background color for a cell based on its position
+/// Returns the background color for a cell based on its position and theme
 /// Creates a visual distinction between the 3x3 sudoku boxes
-fn get_cell_background_color(row: usize, col: usize) -> Color {
+fn get_cell_background_color(row: usize, col: usize, theme: &Theme) -> Color {
     let box_row = row / 3;
     let box_col = col / 3;
 
     // Alternate colors for the 3x3 boxes to make them visually distinct
     if (box_row + box_col) % 2 == 0 {
-        Color::srgb(0.9, 0.9, 0.9) // Light gray
+        theme.primary_color
     } else {
-        Color::srgb(0.8, 0.8, 0.8) // Slightly darker gray
+        theme.secondary_color
     }
 }
 
 // --- UI Systems ---
+
+/// A system that initializes the theme resource.
+pub fn setup_theme(mut commands: Commands) {
+    commands.insert_resource(Theme::default());
+}
 
 /// A system that loads the cat ASCII art into the `CatEmojis` resource.
 /// Now using the user's new detailed multi-line ASCII kitten designs!
@@ -165,10 +256,11 @@ pub fn update_cell_text(
 /// This provides visual feedback by:
 /// - Highlighting conflicting cells in red
 /// - Highlighting the entire board in green when completed
-/// - Using normal colors otherwise
+/// - Using themed colors for normal cells
 pub fn update_cell_colors(
     board: Res<BoardState>,
     game_state: Res<GameState>,
+    theme: Res<Theme>,
     mut cell_query: Query<(&Cell, &mut BackgroundColor)>,
 ) {
     let conflicts = board.get_conflicts();
@@ -176,7 +268,7 @@ pub fn update_cell_colors(
     let is_complete = matches!(*game_state, GameState::Won);
 
     for (cell, mut bg_color) in &mut cell_query {
-        let base_color = get_cell_background_color(cell.row, cell.col);
+        let base_color = get_cell_background_color(cell.row, cell.col, &theme);
 
         if is_complete {
             // Green tint for completion - celebrate!
@@ -216,6 +308,36 @@ pub fn update_button_colors(
             Without<NewGameButton>,
         ),
     >,
+    mut undo_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (
+            With<UndoButton>,
+            Changed<Interaction>,
+            Without<NewGameButton>,
+            Without<ClearButton>,
+        ),
+    >,
+    mut redo_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (
+            With<RedoButton>,
+            Changed<Interaction>,
+            Without<NewGameButton>,
+            Without<ClearButton>,
+            Without<UndoButton>,
+        ),
+    >,
+    mut hint_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (
+            With<HintButton>,
+            Changed<Interaction>,
+            Without<NewGameButton>,
+            Without<ClearButton>,
+            Without<UndoButton>,
+            Without<RedoButton>,
+        ),
+    >,
 ) {
     // Handle New Game button (green theme)
     for (interaction, mut bg_color) in &mut new_game_query {
@@ -234,40 +356,185 @@ pub fn update_button_colors(
             Interaction::None => bg_color.0 = Color::srgb(0.6, 0.3, 0.3),
         }
     }
+
+    // Handle Undo button (blue theme)
+    for (interaction, mut bg_color) in &mut undo_query {
+        match interaction {
+            Interaction::Pressed => bg_color.0 = Color::srgb(0.2, 0.2, 0.4),
+            Interaction::Hovered => bg_color.0 = Color::srgb(0.4, 0.4, 0.7),
+            Interaction::None => bg_color.0 = Color::srgb(0.3, 0.3, 0.6),
+        }
+    }
+
+    // Handle Redo button (purple theme)
+    for (interaction, mut bg_color) in &mut redo_query {
+        match interaction {
+            Interaction::Pressed => bg_color.0 = Color::srgb(0.4, 0.2, 0.4),
+            Interaction::Hovered => bg_color.0 = Color::srgb(0.7, 0.4, 0.7),
+            Interaction::None => bg_color.0 = Color::srgb(0.6, 0.3, 0.6),
+        }
+    }
+
+    // Handle Hint button (orange theme)
+    for (interaction, mut bg_color) in &mut hint_query {
+        match interaction {
+            Interaction::Pressed => bg_color.0 = Color::srgb(0.5, 0.3, 0.1),
+            Interaction::Hovered => bg_color.0 = Color::srgb(0.8, 0.5, 0.2),
+            Interaction::None => bg_color.0 = Color::srgb(0.7, 0.4, 0.1),
+        }
+    }
 }
 
-/// System to add subtle hover effects to game cells.
+/// System to update the timer display with current elapsed time.
+pub fn update_timer_display(
+    session: Res<GameSession>,
+    mut timer_query: Query<&mut Text, With<TimerDisplay>>,
+) {
+    if session.is_changed() {
+        for mut text in &mut timer_query {
+            let elapsed = session.current_elapsed();
+            let minutes = elapsed.as_secs() / 60;
+            let seconds = elapsed.as_secs() % 60;
+            text.0 = format!("Time: {:02}:{:02}", minutes, seconds);
+        }
+    }
+}
+
+/// System to update the move counter display.
+pub fn update_move_counter_display(
+    session: Res<GameSession>,
+    mut counter_query: Query<&mut Text, With<MoveCounterDisplay>>,
+) {
+    if session.is_changed() {
+        for mut text in &mut counter_query {
+            text.0 = format!("Moves: {}", session.move_count);
+        }
+    }
+}
+
+/// System to update the hint button text to show remaining hints or debug status.
+pub fn update_hint_button_text(
+    hint_system: Res<HintSystem>,
+    debug_mode: Res<DebugMode>,
+    hint_query: Query<&Children, With<HintButton>>,
+    mut text_query: Query<&mut Text>,
+) {
+    // Only update if either hint system or debug mode has changed
+    if hint_system.is_changed() || debug_mode.is_changed() {
+        for children in &hint_query {
+            // Find the text child of the hint button
+            for child in children.iter() {
+                if let Ok(mut text) = text_query.get_mut(child) {
+                    text.0 = hint_system.get_hint_button_text(&debug_mode);
+                    break; // Found the text, no need to continue
+                }
+            }
+        }
+    }
+}
+
+/// System to update the debug status display.
+pub fn update_debug_status_display(
+    debug_mode: Res<DebugMode>,
+    mut debug_query: Query<&mut Text, With<DebugStatusDisplay>>,
+) {
+    if debug_mode.is_changed() {
+        for mut text in &mut debug_query {
+            if debug_mode.enabled && debug_mode.unlimited_hints {
+                text.0 = "🐛 DEBUG MODE: Unlimited Hints".to_string();
+            } else {
+                text.0 = "Press ⌘D (Mac) or Ctrl+D (PC) for debug mode".to_string();
+            }
+        }
+    }
+}
+
+/// System to update timer display every second (for live countdown).
+pub fn tick_timer_display(
+    _time: Res<Time>,
+    session: Res<GameSession>,
+    mut timer_query: Query<&mut Text, With<TimerDisplay>>,
+) {
+    // Update every frame to show live timer
+    if !session.is_paused {
+        for mut text in &mut timer_query {
+            let elapsed = session.current_elapsed();
+            let minutes = elapsed.as_secs() / 60;
+            let seconds = elapsed.as_secs() % 60;
+            text.0 = format!("Time: {:02}:{:02}", minutes, seconds);
+        }
+    }
+}
+
+/// System to add advanced hover effects with row/column/box highlighting.
 pub fn update_cell_hover_effects(
     board: Res<BoardState>,
+    theme: Res<Theme>,
     mut cell_query: Query<
-        (&Cell, &Interaction, &mut BorderColor),
+        (&Cell, &Interaction, &mut BorderColor, &mut BackgroundColor),
         (With<Button>, Changed<Interaction>),
     >,
+    mut all_cells_query: Query<(&Cell, &mut BackgroundColor), Without<Button>>,
 ) {
-    for (cell, interaction, mut border_color) in &mut cell_query {
+    // Find the currently hovered cell
+    let mut hovered_cell: Option<(usize, usize)> = None;
+    
+    for (cell, interaction, mut border_color, mut bg_color) in &mut cell_query {
         match interaction {
             Interaction::Hovered => {
-                // Only show interactive hover on cells that can be changed (not given cells)
+                hovered_cell = Some((cell.row, cell.col));
+                
+                // Enhanced border for hovered cell
                 if !board.is_given_cell(cell.row, cell.col) {
-                    border_color.0 = Color::srgb(0.2, 0.6, 1.0); // Bright blue hover for player cells
+                    border_color.0 = theme.cell_highlight_color; // Theme-based hover color
+                    // Slightly brighten the hovered cell itself
+                    let base_color = get_cell_background_color(cell.row, cell.col, &theme);
+                    let [r, g, b, a] = base_color.to_linear().to_f32_array();
+                    *bg_color = BackgroundColor(Color::linear_rgba(r * 1.2, g * 1.2, b * 1.2, a));
                 } else {
                     border_color.0 = Color::srgb(0.6, 0.6, 0.6); // Darker border to show it's not interactive
                 }
             }
             Interaction::None => {
+                // Reset to normal colors
                 if board.is_given_cell(cell.row, cell.col) {
                     border_color.0 = Color::srgb(0.3, 0.3, 0.3); // Darker borders for given cells
                 } else {
                     border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Normal border for player cells
                 }
+                *bg_color = BackgroundColor(get_cell_background_color(cell.row, cell.col, &theme));
             }
             Interaction::Pressed => {
-                // Handled by the cell click system in the controller
+                // Keep normal styling during press
                 if board.is_given_cell(cell.row, cell.col) {
-                    border_color.0 = Color::srgb(0.3, 0.3, 0.3); // Keep darker for given cells
+                    border_color.0 = Color::srgb(0.3, 0.3, 0.3);
                 } else {
-                    border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Normal for player cells
+                    border_color.0 = Color::srgb(0.4, 0.4, 0.4);
                 }
+            }
+        }
+    }
+    
+    // Apply subtle highlighting to related cells (same row, column, or box)
+    if let Some((hovered_row, hovered_col)) = hovered_cell {
+        let hovered_box_row = hovered_row / 3;
+        let hovered_box_col = hovered_col / 3;
+        
+        for (cell, mut bg_color) in &mut all_cells_query {
+            let is_same_row = cell.row == hovered_row;
+            let is_same_col = cell.col == hovered_col;
+            let is_same_box = (cell.row / 3 == hovered_box_row) && (cell.col / 3 == hovered_box_col);
+            
+            if is_same_row || is_same_col || is_same_box {
+                // Subtle highlight for related cells
+                let base_color = get_cell_background_color(cell.row, cell.col, &theme);
+                let [r, g, b, a] = base_color.to_linear().to_f32_array();
+                *bg_color = BackgroundColor(Color::linear_rgba(
+                    r + 0.05, // Slight brightening
+                    g + 0.05,
+                    b + 0.05,
+                    a,
+                ));
             }
         }
     }
@@ -303,6 +570,58 @@ pub fn setup_grid(mut commands: Commands) {
                 },
             ));
 
+            // Game info panel (timer and move counter)
+            parent
+                .spawn((
+                    Node {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Row,
+                        column_gap: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(15.0)),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
+                ))
+                .with_children(|info_parent| {
+                    // Timer display
+                    info_parent.spawn((
+                        Text::new("Time: 00:00"),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                        TimerDisplay,
+                    ));
+
+                    // Move counter display
+                    info_parent.spawn((
+                        Text::new("Moves: 0"),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                        MoveCounterDisplay,
+                    ));
+                });
+
+            // Debug status display
+            parent.spawn((
+                Text::new("Press ⌘D (Mac) or Ctrl+D (PC) for debug mode"),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                Node {
+                    margin: UiRect::bottom(Val::Px(10.0)),
+                    ..default()
+                },
+                    DebugStatusDisplay,
+            ));
+
             // Game grid container
             parent
                 .spawn((
@@ -318,7 +637,7 @@ pub fn setup_grid(mut commands: Commands) {
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)), // Will be updated by theme
                 ))
                 .with_children(|grid_parent| {
                     // Create 9x9 grid of cells
@@ -336,7 +655,7 @@ pub fn setup_grid(mut commands: Commands) {
                                         border: UiRect::all(Val::Px(1.0)),
                                         ..default()
                                     },
-                                    BackgroundColor(get_cell_background_color(row, col)),
+                                    BackgroundColor(Color::srgb(0.9, 0.9, 0.9)), // Initial color, will be themed
                                     BorderColor(Color::srgb(0.4, 0.4, 0.4)),
                                 ))
                                 .with_children(|cell_parent| {
@@ -359,70 +678,175 @@ pub fn setup_grid(mut commands: Commands) {
                     }
                 });
 
-            // Buttons container
+            // Buttons container - Split into two rows
             parent
                 .spawn((Node {
                     display: Display::Flex,
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(20.0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(10.0),
                     margin: UiRect::top(Val::Px(20.0)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     ..default()
                 },))
-                .with_children(|buttons_parent| {
-                    // New Game button
-                    buttons_parent
-                        .spawn((
-                            Button,
-                            NewGameButton,
-                            Node {
-                                width: Val::Px(150.0),
-                                height: Val::Px(40.0),
-                                align_items: AlignItems::Center,
-                                justify_content: JustifyContent::Center,
-                                border: UiRect::all(Val::Px(2.0)),
-                                ..default()
-                            },
-                            BackgroundColor(Color::srgb(0.3, 0.6, 0.3)),
-                            BorderColor(Color::srgb(0.4, 0.8, 0.4)),
-                        ))
-                        .with_children(|button_parent| {
-                            button_parent.spawn((
-                                Text::new("New Game"),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::WHITE),
-                            ));
+                .with_children(|buttons_container| {
+                    // Top row: New Game and Clear Board
+                    buttons_container
+                        .spawn((Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            column_gap: Val::Px(20.0),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },))
+                        .with_children(|top_row| {
+                            // New Game button
+                            top_row
+                                .spawn((
+                                    Button,
+                                    NewGameButton,
+                                    Node {
+                                        width: Val::Px(120.0),
+                                        height: Val::Px(40.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::all(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.3, 0.6, 0.3)),
+                                    BorderColor(Color::srgb(0.4, 0.8, 0.4)),
+                                ))
+                                .with_children(|button_parent| {
+                                    button_parent.spawn((
+                                        Text::new("New Game"),
+                                        TextFont {
+                                            font_size: 14.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
+
+                            // Clear button
+                            top_row
+                                .spawn((
+                                    Button,
+                                    ClearButton,
+                                    Node {
+                                        width: Val::Px(120.0),
+                                        height: Val::Px(40.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::all(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.6, 0.3, 0.3)),
+                                    BorderColor(Color::srgb(0.8, 0.4, 0.4)),
+                                ))
+                                .with_children(|button_parent| {
+                                    button_parent.spawn((
+                                        Text::new("Clear Board"),
+                                        TextFont {
+                                            font_size: 14.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
                         });
 
-                    // Clear button
-                    buttons_parent
-                        .spawn((
-                            Button,
-                            ClearButton,
-                            Node {
-                                width: Val::Px(150.0),
-                                height: Val::Px(40.0),
-                                align_items: AlignItems::Center,
-                                justify_content: JustifyContent::Center,
-                                border: UiRect::all(Val::Px(2.0)),
-                                ..default()
-                            },
-                            BackgroundColor(Color::srgb(0.6, 0.3, 0.3)),
-                            BorderColor(Color::srgb(0.8, 0.4, 0.4)),
-                        ))
-                        .with_children(|button_parent| {
-                            button_parent.spawn((
-                                Text::new("Clear Board"),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::WHITE),
-                            ));
+                    // Bottom row: Undo, Redo, Hint
+                    buttons_container
+                        .spawn((Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            column_gap: Val::Px(15.0),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },))
+                        .with_children(|bottom_row| {
+                            // Undo button
+                            bottom_row
+                                .spawn((
+                                    Button,
+                                    UndoButton,
+                                    Node {
+                                        width: Val::Px(80.0),
+                                        height: Val::Px(35.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::all(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.3, 0.3, 0.6)),
+                                    BorderColor(Color::srgb(0.4, 0.4, 0.8)),
+                                ))
+                                .with_children(|button_parent| {
+                                    button_parent.spawn((
+                                        Text::new("⟲ Undo"),
+                                        TextFont {
+                                            font_size: 12.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
+
+                            // Redo button
+                            bottom_row
+                                .spawn((
+                                    Button,
+                                    RedoButton,
+                                    Node {
+                                        width: Val::Px(80.0),
+                                        height: Val::Px(35.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::all(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.6, 0.3, 0.6)),
+                                    BorderColor(Color::srgb(0.8, 0.4, 0.8)),
+                                ))
+                                .with_children(|button_parent| {
+                                    button_parent.spawn((
+                                        Text::new("⟳ Redo"),
+                                        TextFont {
+                                            font_size: 12.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
+
+                            // Hint button
+                            bottom_row
+                                .spawn((
+                                    Button,
+                                    HintButton,
+                                    Node {
+                                        width: Val::Px(80.0),
+                                        height: Val::Px(35.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        border: UiRect::all(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.7, 0.4, 0.1)),
+                                    BorderColor(Color::srgb(0.9, 0.6, 0.3)),
+                                ))
+                                .with_children(|button_parent| {
+                                    button_parent.spawn((
+                                        Text::new("💡 Hint"),
+                                        TextFont {
+                                            font_size: 12.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
                         });
                 });
         });
@@ -448,7 +872,7 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>()
-            .add_systems(Startup, setup_cat_emojis)
+            .add_systems(Startup, (setup_theme, setup_cat_emojis))
             .add_systems(OnEnter(AppState::Ready), setup_grid)
             .add_systems(
                 Update,
@@ -457,12 +881,25 @@ impl Plugin for UiPlugin {
                         .run_if(resource_changed::<BoardState>)
                         .run_if(in_state(AppState::Ready)),
                     update_cell_colors
-                        .run_if(|b: Res<BoardState>, s: Res<GameState>| {
-                            b.is_changed() || s.is_changed()
+                        .run_if(|b: Res<BoardState>, s: Res<GameState>, t: Res<Theme>| {
+                            b.is_changed() || s.is_changed() || t.is_changed()
                         })
                         .run_if(in_state(AppState::Ready)),
                     update_button_colors.run_if(in_state(AppState::Ready)),
                     update_cell_hover_effects.run_if(in_state(AppState::Ready)),
+                    update_timer_display
+                        .run_if(resource_changed::<GameSession>)
+                        .run_if(in_state(AppState::Ready)),
+                    update_move_counter_display
+                        .run_if(resource_changed::<GameSession>)
+                        .run_if(in_state(AppState::Ready)),
+                    update_hint_button_text
+                        .run_if(|h: Res<HintSystem>, d: Res<DebugMode>| h.is_changed() || d.is_changed())
+                        .run_if(in_state(AppState::Ready)),
+                    update_debug_status_display
+                        .run_if(resource_changed::<DebugMode>)
+                        .run_if(in_state(AppState::Ready)),
+                    tick_timer_display.run_if(in_state(AppState::Ready)),
                     transition_to_ready.run_if(in_state(AppState::Loading)),
                 ),
             );
