@@ -1,12 +1,12 @@
-//! Nine Lives Cat Sudoku Controller Layer
-//!
-//! This crate contains the controller logic for the Nine Lives Cat Sudoku game.
-//! It orchestrates the interaction between the core game logic and the UI layer.
-//! Responsibilities:
-//! - Event handling (user input)
-//! - Game state transitions
-//! - Application orchestration
-//! - Connecting model and view layers
+/// Nine Lives Cat Sudoku Controller Layer
+///
+/// This crate contains the controller logic for the Nine Lives Cat Sudoku game.
+///It orchestrates the interaction between the core game logic and the UI layer.
+/// Responsibilities:
+/// - Event handling (user input)
+/// - Game state transitions
+/// - Application orchestration
+/// - Connecting model and view layers
 
 use bevy::prelude::*;
 use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint};
