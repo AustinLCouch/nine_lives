@@ -8,7 +8,7 @@
 //! - Application states
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession};
+use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession, HintSystem, DebugMode};
 use std::collections::HashSet;
 
 // --- UI Components ---
@@ -47,6 +47,10 @@ pub struct RedoButton;
 /// A component to tag the hint button.
 #[derive(Component)]
 pub struct HintButton;
+
+/// A component to tag the debug status display.
+#[derive(Component)]
+pub struct DebugStatusDisplay;
 
 /// Component to mark a cell as currently hinted (for pulsing animation).
 #[derive(Component)]
@@ -408,6 +412,43 @@ pub fn update_move_counter_display(
     }
 }
 
+/// System to update the hint button text to show remaining hints or debug status.
+pub fn update_hint_button_text(
+    hint_system: Res<HintSystem>,
+    debug_mode: Res<DebugMode>,
+    hint_query: Query<&Children, With<HintButton>>,
+    mut text_query: Query<&mut Text>,
+) {
+    // Only update if either hint system or debug mode has changed
+    if hint_system.is_changed() || debug_mode.is_changed() {
+        for children in &hint_query {
+            // Find the text child of the hint button
+            for child in children.iter() {
+                if let Ok(mut text) = text_query.get_mut(child) {
+                    text.0 = hint_system.get_hint_button_text(&debug_mode);
+                    break; // Found the text, no need to continue
+                }
+            }
+        }
+    }
+}
+
+/// System to update the debug status display.
+pub fn update_debug_status_display(
+    debug_mode: Res<DebugMode>,
+    mut debug_query: Query<&mut Text, With<DebugStatusDisplay>>,
+) {
+    if debug_mode.is_changed() {
+        for mut text in &mut debug_query {
+            if debug_mode.enabled && debug_mode.unlimited_hints {
+                text.0 = "🐛 DEBUG MODE: Unlimited Hints".to_string();
+            } else {
+                text.0 = "Press ⌘D (Mac) or Ctrl+D (PC) for debug mode".to_string();
+            }
+        }
+    }
+}
+
 /// System to update timer display every second (for live countdown).
 pub fn tick_timer_display(
     _time: Res<Time>,
@@ -565,6 +606,21 @@ pub fn setup_grid(mut commands: Commands) {
                         MoveCounterDisplay,
                     ));
                 });
+
+            // Debug status display
+            parent.spawn((
+                Text::new("Press ⌘D (Mac) or Ctrl+D (PC) for debug mode"),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                Node {
+                    margin: UiRect::bottom(Val::Px(10.0)),
+                    ..default()
+                },
+                    DebugStatusDisplay,
+            ));
 
             // Game grid container
             parent
@@ -836,6 +892,12 @@ impl Plugin for UiPlugin {
                         .run_if(in_state(AppState::Ready)),
                     update_move_counter_display
                         .run_if(resource_changed::<GameSession>)
+                        .run_if(in_state(AppState::Ready)),
+                    update_hint_button_text
+                        .run_if(|h: Res<HintSystem>, d: Res<DebugMode>| h.is_changed() || d.is_changed())
+                        .run_if(in_state(AppState::Ready)),
+                    update_debug_status_display
+                        .run_if(resource_changed::<DebugMode>)
                         .run_if(in_state(AppState::Ready)),
                     tick_timer_display.run_if(in_state(AppState::Ready)),
                     transition_to_ready.run_if(in_state(AppState::Loading)),

@@ -226,6 +226,49 @@ impl Default for Solution {
     }
 }
 
+/// Debug mode configuration for testing and development.
+#[derive(Debug, Clone, Resource)]
+pub struct DebugMode {
+    pub enabled: bool,
+    pub unlimited_hints: bool,
+}
+
+impl Default for DebugMode {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            unlimited_hints: false,
+        }
+    }
+}
+
+impl DebugMode {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Enable debug mode with unlimited hints.
+    pub fn enable_unlimited_hints(&mut self) {
+        self.enabled = true;
+        self.unlimited_hints = true;
+    }
+    
+    /// Disable debug mode and return to normal gameplay.
+    pub fn disable(&mut self) {
+        self.enabled = false;
+        self.unlimited_hints = false;
+    }
+    
+    /// Toggle debug mode with unlimited hints.
+    pub fn toggle_unlimited_hints(&mut self) {
+        if self.enabled && self.unlimited_hints {
+            self.disable();
+        } else {
+            self.enable_unlimited_hints();
+        }
+    }
+}
+
 /// Hint system configuration and state.
 #[derive(Debug, Clone, Resource)]
 pub struct HintSystem {
@@ -247,9 +290,12 @@ impl HintSystem {
         self.hints_remaining = max_hints;
     }
 
-    /// Use a hint if available.
-    pub fn use_hint(&mut self) -> bool {
-        if self.hints_remaining > 0 {
+    /// Use a hint if available, respecting debug mode.
+    pub fn use_hint(&mut self, debug_mode: &DebugMode) -> bool {
+        if debug_mode.unlimited_hints {
+            // In debug mode, we always allow hints but don't decrement the counter
+            true
+        } else if self.hints_remaining > 0 {
             self.hints_remaining -= 1;
             true
         } else {
@@ -257,9 +303,18 @@ impl HintSystem {
         }
     }
 
-    /// Check if hints are available.
-    pub fn can_use_hint(&self) -> bool {
-        self.hints_remaining > 0
+    /// Check if hints are available, respecting debug mode.
+    pub fn can_use_hint(&self, debug_mode: &DebugMode) -> bool {
+        debug_mode.unlimited_hints || self.hints_remaining > 0
+    }
+    
+    /// Get display text for hint button, showing debug status if applicable.
+    pub fn get_hint_button_text(&self, debug_mode: &DebugMode) -> String {
+        if debug_mode.unlimited_hints {
+            "💡 Debug ∞".to_string()
+        } else {
+            format!("💡 Hint {}", self.hints_remaining)
+        }
     }
 }
 

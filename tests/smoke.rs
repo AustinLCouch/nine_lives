@@ -68,27 +68,28 @@ fn test_game_history_functionality() {
 #[test]
 fn test_hint_system_complete() {
     let mut hint_system = HintSystem::new(3);
+    let debug_mode = DebugMode::new();
     
     // Test initial state
     assert_eq!(hint_system.hints_remaining, 3);
-    assert!(hint_system.can_use_hint());
+    assert!(hint_system.can_use_hint(&debug_mode));
     
     // Use hints
-    assert!(hint_system.use_hint());
+    assert!(hint_system.use_hint(&debug_mode));
     assert_eq!(hint_system.hints_remaining, 2);
     
-    assert!(hint_system.use_hint());
-    assert!(hint_system.use_hint());
+    assert!(hint_system.use_hint(&debug_mode));
+    assert!(hint_system.use_hint(&debug_mode));
     assert_eq!(hint_system.hints_remaining, 0);
-    assert!(!hint_system.can_use_hint());
+    assert!(!hint_system.can_use_hint(&debug_mode));
     
     // Can't use more hints
-    assert!(!hint_system.use_hint());
+    assert!(!hint_system.use_hint(&debug_mode));
     
     // Reset hints
     hint_system.reset(5);
     assert_eq!(hint_system.hints_remaining, 5);
-    assert!(hint_system.can_use_hint());
+    assert!(hint_system.can_use_hint(&debug_mode));
 }
 
 #[test]
@@ -177,9 +178,10 @@ fn test_full_game_flow_integration() {
     }
     
     // Test hint system
+    let debug_mode = DebugMode::new();
     let initial_hints = hint_system.hints_remaining;
     if let Some((row, col, value)) = get_next_hint(&board, &solution) {
-        if hint_system.use_hint() {
+        if hint_system.use_hint(&debug_mode) {
             board.cells[row][col] = Some(value);
             board.cell_types[row][col] = Some(CellType::Player);
         }
@@ -189,5 +191,46 @@ fn test_full_game_flow_integration() {
     // Verify game state consistency
     let game_state = board.compute_game_state();
     assert!(matches!(game_state, GameState::Playing | GameState::Won));
+}
+
+#[test]
+fn test_debug_mode_unlimited_hints() {
+    let mut hint_system = HintSystem::new(1); // Start with only 1 hint
+    let mut debug_mode = DebugMode::new();
+    
+    // Test normal mode
+    assert_eq!(hint_system.hints_remaining, 1);
+    assert!(hint_system.can_use_hint(&debug_mode));
+    assert!(hint_system.use_hint(&debug_mode));
+    assert_eq!(hint_system.hints_remaining, 0);
+    assert!(!hint_system.can_use_hint(&debug_mode));
+    
+    // Enable debug mode
+    debug_mode.enable_unlimited_hints();
+    assert!(debug_mode.enabled);
+    assert!(debug_mode.unlimited_hints);
+    
+    // Test unlimited hints in debug mode
+    assert!(hint_system.can_use_hint(&debug_mode)); // Should work even with 0 hints
+    assert!(hint_system.use_hint(&debug_mode)); // Should work
+    assert_eq!(hint_system.hints_remaining, 0); // Should not decrement in debug mode
+    assert!(hint_system.use_hint(&debug_mode)); // Should work again
+    assert!(hint_system.use_hint(&debug_mode)); // Should work repeatedly
+    
+    // Test hint button text
+    assert_eq!(hint_system.get_hint_button_text(&debug_mode), "💡 Debug ∞");
+    
+    // Disable debug mode
+    debug_mode.disable();
+    assert!(!debug_mode.enabled);
+    assert!(!debug_mode.unlimited_hints);
+    assert!(!hint_system.can_use_hint(&debug_mode)); // Back to normal - no hints
+    assert_eq!(hint_system.get_hint_button_text(&debug_mode), "💡 Hint 0");
+    
+    // Test toggle functionality
+    debug_mode.toggle_unlimited_hints();
+    assert!(debug_mode.unlimited_hints);
+    debug_mode.toggle_unlimited_hints();
+    assert!(!debug_mode.unlimited_hints);
 }
 

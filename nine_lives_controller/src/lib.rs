@@ -9,7 +9,7 @@
 //! - Connecting model and view layers
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, get_next_hint};
+use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint};
 use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton, UndoButton, RedoButton, HintButton};
 
 // --- Controller Systems ---
@@ -116,27 +116,70 @@ pub fn hint_button_system(
     mut board: ResMut<BoardState>,
     solution: Res<Solution>,
     mut hint_system: ResMut<HintSystem>,
+    debug_mode: Res<DebugMode>,
 ) {
     for interaction in &mut interaction_query {
         if *interaction == Interaction::Pressed {
-            if hint_system.use_hint() {
+            if hint_system.use_hint(&debug_mode) {
                 if let Some((row, col, correct_value)) = get_next_hint(&board, &solution) {
                     // Apply the hint directly to the board
                     board.cells[row][col] = Some(correct_value);
                     board.cell_types[row][col] = Some(nine_lives_core::CellType::Player);
-                    println!(
-                        "Hint: Placed cat #{} at ({}, {}). {} hints remaining.",
-                        correct_value + 1,
-                        row + 1,
-                        col + 1,
-                        hint_system.hints_remaining
-                    );
+                    
+                    if debug_mode.unlimited_hints {
+                        println!(
+                            "DEBUG HINT: Placed cat #{} at ({}, {}). [Unlimited hints enabled]",
+                            correct_value + 1,
+                            row + 1,
+                            col + 1
+                        );
+                    } else {
+                        println!(
+                            "Hint: Placed cat #{} at ({}, {}). {} hints remaining.",
+                            correct_value + 1,
+                            row + 1,
+                            col + 1,
+                            hint_system.hints_remaining
+                        );
+                    }
                 } else {
                     println!("No hints available - puzzle may be complete!");
                 }
             } else {
                 println!("No hints remaining!");
             }
+        }
+    }
+}
+
+/// System to handle debug mode toggle (Cmd+D or Ctrl+D).
+pub fn debug_mode_system(
+    input: Res<ButtonInput<KeyCode>>,
+    mut debug_mode: ResMut<DebugMode>,
+) {
+    let cmd_pressed = input.pressed(KeyCode::SuperLeft) || input.pressed(KeyCode::SuperRight);
+    let ctrl_pressed = input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::ControlRight);
+    
+    // Use Cmd on Mac, Ctrl on other platforms
+    let modifier_pressed = if cfg!(target_os = "macos") {
+        cmd_pressed
+    } else {
+        ctrl_pressed
+    };
+    
+    if modifier_pressed && input.just_pressed(KeyCode::KeyD) {
+        debug_mode.toggle_unlimited_hints();
+        if debug_mode.unlimited_hints {
+            println!("🐛=== DEBUG MODE ACTIVATED ===");
+            println!("   • Unlimited hints enabled");
+            println!("   • Perfect for testing and solving puzzles");
+            println!("   • Press ⌘D/Ctrl+D again to disable");
+            println!("================================");
+        } else {
+            println!("✅=== DEBUG MODE DISABLED ===");
+            println!("   • Back to normal gameplay");
+            println!("   • Limited hints restored");
+            println!("===============================");
         }
     }
 }
@@ -231,6 +274,7 @@ pub fn run_game() {
         .init_resource::<GameHistory>()
         .init_resource::<Solution>()
         .init_resource::<HintSystem>()
+        .init_resource::<DebugMode>()
         // Add the UI layer (view)
         .add_plugins(nine_lives_ui::UiPlugin)
         // Add controller systems
@@ -244,6 +288,7 @@ pub fn run_game() {
                 redo_button_system,
                 hint_button_system,
                 keyboard_shortcuts_system,
+                debug_mode_system,
                 game_state_system,
             )
                 .run_if(in_state(AppState::Ready)),
