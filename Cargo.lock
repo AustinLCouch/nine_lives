@@ -2821,6 +2821,7 @@ name = "nine_lives_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "rand",
 ]
 
 [[package]]

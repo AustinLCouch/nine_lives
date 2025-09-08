@@ -3,8 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/nine_lives_controller" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/nine_lives_core/nine_lives_core" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/nine_lives_core/nine_lives_logic" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/nine_lives_ui" vcs="Git" />
   </component>
 </project>
