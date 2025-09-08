@@ -76,12 +76,12 @@ pub fn setup_cat_emojis(mut commands: Commands) {
   (  1  )"
             .to_string(),
         r"  /\_____/\
- (  • ᴥ •  )
+ (  o o o  )
  (  > 2 <  )
   \__|__|_/"
             .to_string(),
         r"   /\_/\  
-  ( =ω= ) 
+  ( =w= ) 
   (  3  ) 
   /  |  \ 
  <__^__^__>"
