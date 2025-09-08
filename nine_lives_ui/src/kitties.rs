@@ -16,8 +16,9 @@ pub struct KittyArts {
 }
 
 /// Beautiful detailed ASCII kitty designs - each kitten has its own personality!
+/// These are the user's custom kitten designs with unique expressions and features
 pub const DEFAULT_KITTIES: [KittyArt; 9] = [
-    // Kitten 1 - Wide-eyed and curious
+    // Kitten 1 - Wide-eyed and curious  
     &[
         "   /\\_/\\  ",
         "  ( o.o ) ",

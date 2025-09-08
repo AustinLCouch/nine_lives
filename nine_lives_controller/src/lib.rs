@@ -138,7 +138,7 @@ mod tests {
         // Simulate cycling a cell
         board.cycle_cell(0, 0, cat_emojis.emojis.len());
         assert_eq!(board.cells[0][0], Some(0));
-        
+
         board.cycle_cell(0, 0, cat_emojis.emojis.len());
         assert_eq!(board.cells[0][0], Some(1));
     }
@@ -149,7 +149,7 @@ mod tests {
         let mut board = BoardState::new();
         board.cycle_cell(1, 1, 3);
         board.cycle_cell(2, 2, 3);
-        
+
         // Now clear the board
         board.clear();
         assert_eq!(board.cells[1][1], None);

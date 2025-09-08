@@ -54,29 +54,74 @@ pub enum AppState {
 fn get_cell_background_color(row: usize, col: usize) -> Color {
     let box_row = row / 3;
     let box_col = col / 3;
-    
+
     // Alternate colors for the 3x3 boxes to make them visually distinct
     if (box_row + box_col) % 2 == 0 {
-        Color::srgb(0.9, 0.9, 0.9)  // Light gray
+        Color::srgb(0.9, 0.9, 0.9) // Light gray
     } else {
-        Color::srgb(0.8, 0.8, 0.8)  // Slightly darker gray
+        Color::srgb(0.8, 0.8, 0.8) // Slightly darker gray
     }
 }
 
 // --- UI Systems ---
 
 /// A system that loads the cat ASCII art into the `CatEmojis` resource.
+/// Now using the user's new detailed multi-line ASCII kitten designs!
 pub fn setup_cat_emojis(mut commands: Commands) {
     let emojis = vec![
-        " /\\_/\\\n( ^.^ )\n \\_1_/".to_string(),
-        " /\\_/\\\n( o.o )\n \\_2_/".to_string(),
-        " /\\_/\\\n( -.- )\n \\_3_/".to_string(),
-        " /\\_/\\\n( >:< )\n \\_4_/".to_string(),
-        " /\\_/\\\n( @.@ )\n \\_5_/".to_string(),
-        " /\\_/\\\n( u.u )\n \\_6_/".to_string(),
-        " /\\_/\\\n( *.* )\n \\_7_/".to_string(),
-        " /\\_/\\\n( x.x )\n \\_8_/".to_string(),
-        " /\\_/\\\n( $.$ )\n \\_9_/".to_string(),
+        r"   /\_/\  
+  ( o.o ) 
+  >  ^  < 
+   / | \  
+  (  1  )"
+            .to_string(),
+        r"  /\_____/\
+ (  • ᴥ •  )
+ (  > 2 <  )
+  \__|__|_/"
+            .to_string(),
+        r"   /\_/\  
+  ( =ω= ) 
+  (  3  ) 
+  /  |  \ 
+ <__^__^__>"
+            .to_string(),
+        r"   /\_/\  
+  ( o.o ) 
+  /| 4 |\ 
+  \_   _/ 
+    \_/"
+        .to_string(),
+        r"   /\_/\  
+  ( ^_^ ) 
+  (  5  ) 
+  /  |  \ 
+ <__|__|__>"
+            .to_string(),
+        r"   /\_/\  
+  ( o.o ) 
+  (  6  ) 
+  /  |  \ 
+  \__^__/"
+            .to_string(),
+        r"   /\_/\  
+  ( -.- ) 
+  (  7  ) 
+  /  |  \ 
+ <__v__v__>"
+            .to_string(),
+        r"   /\_/\  
+  ( >w< ) 
+  (  8  ) 
+  /  |  \ 
+  \__|__/"
+            .to_string(),
+        r"   /\_/\  
+  ( o_o ) 
+  (  9  ) 
+  /  |  \ 
+ <__*__*__>"
+            .to_string(),
     ];
     commands.insert_resource(CatEmojis { emojis });
 }
@@ -116,7 +161,7 @@ pub fn update_cell_text(
 }
 
 /// A system to update cell colors based on Sudoku validation.
-/// 
+///
 /// This provides visual feedback by:
 /// - Highlighting conflicting cells in red
 /// - Highlighting the entire board in green when completed
@@ -129,10 +174,10 @@ pub fn update_cell_colors(
     let conflicts = board.get_conflicts();
     let conflict_set: HashSet<(usize, usize)> = conflicts.into_iter().collect();
     let is_complete = matches!(*game_state, GameState::Won);
-    
+
     for (cell, mut bg_color) in &mut cell_query {
         let base_color = get_cell_background_color(cell.row, cell.col);
-        
+
         if is_complete {
             // Green tint for completion - celebrate!
             *bg_color = BackgroundColor(Color::srgb(0.6, 0.9, 0.6));
@@ -144,10 +189,10 @@ pub fn update_cell_colors(
             // Convert to linear space, darken, then back to sRGB
             let [r, g, b, a] = base_color.to_linear().to_f32_array();
             let darker_base = Color::linear_rgba(
-                r * 0.7,   // Make significantly darker (30% of original)
+                r * 0.7, // Make significantly darker (30% of original)
                 g * 0.7,
                 b * 0.7,
-                a
+                a,
             );
             *bg_color = BackgroundColor(darker_base);
         } else {
@@ -159,8 +204,18 @@ pub fn update_cell_colors(
 
 /// System to add hover effects to buttons for better user feedback.
 pub fn update_button_colors(
-    mut new_game_query: Query<(&Interaction, &mut BackgroundColor), (With<NewGameButton>, Changed<Interaction>)>,
-    mut clear_query: Query<(&Interaction, &mut BackgroundColor), (With<ClearButton>, Changed<Interaction>, Without<NewGameButton>)>,
+    mut new_game_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (With<NewGameButton>, Changed<Interaction>),
+    >,
+    mut clear_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (
+            With<ClearButton>,
+            Changed<Interaction>,
+            Without<NewGameButton>,
+        ),
+    >,
 ) {
     // Handle New Game button (green theme)
     for (interaction, mut bg_color) in &mut new_game_query {
@@ -170,7 +225,7 @@ pub fn update_button_colors(
             Interaction::None => bg_color.0 = Color::srgb(0.3, 0.6, 0.3),
         }
     }
-    
+
     // Handle Clear button (red theme)
     for (interaction, mut bg_color) in &mut clear_query {
         match interaction {
@@ -184,7 +239,10 @@ pub fn update_button_colors(
 /// System to add subtle hover effects to game cells.
 pub fn update_cell_hover_effects(
     board: Res<BoardState>,
-    mut cell_query: Query<(&Cell, &Interaction, &mut BorderColor), (With<Button>, Changed<Interaction>)>,
+    mut cell_query: Query<
+        (&Cell, &Interaction, &mut BorderColor),
+        (With<Button>, Changed<Interaction>),
+    >,
 ) {
     for (cell, interaction, mut border_color) in &mut cell_query {
         match interaction {
@@ -254,8 +312,8 @@ pub fn setup_grid(mut commands: Commands) {
                         grid_template_rows: RepeatedGridTrack::flex(9, 1.0),
                         column_gap: Val::Px(2.0),
                         row_gap: Val::Px(2.0),
-                        width: Val::Px(580.0),
-                        height: Val::Px(580.0),
+                        width: Val::Px(720.0),
+                        height: Val::Px(630.0),
                         padding: UiRect::all(Val::Px(10.0)),
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
@@ -271,8 +329,8 @@ pub fn setup_grid(mut commands: Commands) {
                                     Button,
                                     Cell { row, col },
                                     Node {
-                                        width: Val::Px(60.0),
-                                        height: Val::Px(60.0),
+                                        width: Val::Px(75.0),
+                                        height: Val::Px(65.0),
                                         align_items: AlignItems::Center,
                                         justify_content: JustifyContent::Center,
                                         border: UiRect::all(Val::Px(1.0)),
@@ -282,14 +340,19 @@ pub fn setup_grid(mut commands: Commands) {
                                     BorderColor(Color::srgb(0.4, 0.4, 0.4)),
                                 ))
                                 .with_children(|cell_parent| {
-                                    // Text node for displaying the cat emoji/ascii
+                                    // Text node for displaying the multi-line cat ASCII art
                                     cell_parent.spawn((
                                         Text::new(" "),
                                         TextFont {
-                                            font_size: 12.0,
+                                            font_size: 8.0,
                                             ..default()
                                         },
                                         TextColor(Color::BLACK),
+                                        Node {
+                                            align_items: AlignItems::Center,
+                                            justify_content: JustifyContent::Center,
+                                            ..default()
+                                        },
                                     ));
                                 });
                         }
@@ -298,17 +361,15 @@ pub fn setup_grid(mut commands: Commands) {
 
             // Buttons container
             parent
-                .spawn((
-                    Node {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Row,
-                        column_gap: Val::Px(20.0),
-                        margin: UiRect::top(Val::Px(20.0)),
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    },
-                ))
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(20.0),
+                    margin: UiRect::top(Val::Px(20.0)),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },))
                 .with_children(|buttons_parent| {
                     // New Game button
                     buttons_parent
@@ -392,10 +453,13 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 (
-                    update_cell_text.run_if(resource_changed::<BoardState>)
+                    update_cell_text
+                        .run_if(resource_changed::<BoardState>)
                         .run_if(in_state(AppState::Ready)),
                     update_cell_colors
-                        .run_if(|b: Res<BoardState>, s: Res<GameState>| b.is_changed() || s.is_changed())
+                        .run_if(|b: Res<BoardState>, s: Res<GameState>| {
+                            b.is_changed() || s.is_changed()
+                        })
                         .run_if(in_state(AppState::Ready)),
                     update_button_colors.run_if(in_state(AppState::Ready)),
                     update_cell_hover_effects.run_if(in_state(AppState::Ready)),
@@ -421,14 +485,17 @@ mod tests {
         let mut app = App::new();
         app.add_systems(Startup, setup_cat_emojis);
         app.update(); // Run startup systems
-        
+
         let cat_emojis = app.world().get_resource::<CatEmojis>().unwrap();
         assert_eq!(cat_emojis.emojis.len(), 9);
-        assert!(cat_emojis.emojis[0].contains("^.^"));
-        assert!(cat_emojis.emojis[8].contains("$.$ "));
+        // Test the new multi-line ASCII art designs
+        assert!(cat_emojis.emojis[0].contains("o.o")); // First kitten has o.o eyes
+        assert!(cat_emojis.emojis[0].contains("(  1  )")); // First kitten has number 1
+        assert!(cat_emojis.emojis[8].contains("o_o")); // Ninth kitten has o_o eyes 
+        assert!(cat_emojis.emojis[8].contains("(  9  )")); // Ninth kitten has number 9
     }
 
-    #[test] 
+    #[test]
     fn test_cell_component() {
         let cell = Cell { row: 5, col: 3 };
         assert_eq!(cell.row, 5);
