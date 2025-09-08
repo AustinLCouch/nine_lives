@@ -9,6 +9,7 @@
 
 use bevy::prelude::*;
 use nine_lives_core::{BoardState, GRID_SIZE};
+use std::collections::HashSet;
 
 // --- UI Components ---
 
@@ -97,6 +98,36 @@ pub fn update_cell_text(
                     text.0 = new_text_value;
                 }
             }
+        }
+    }
+}
+
+/// A system to update cell colors based on Sudoku validation.
+/// 
+/// This provides visual feedback by:
+/// - Highlighting conflicting cells in red
+/// - Highlighting the entire board in green when completed
+/// - Using normal colors otherwise
+pub fn update_cell_colors(
+    board: Res<BoardState>,
+    mut cell_query: Query<(&Cell, &mut BackgroundColor)>,
+) {
+    let conflicts = board.get_conflicts();
+    let conflict_set: HashSet<(usize, usize)> = conflicts.into_iter().collect();
+    let is_complete = board.is_complete();
+    
+    for (cell, mut bg_color) in &mut cell_query {
+        let base_color = get_cell_background_color(cell.row, cell.col);
+        
+        if is_complete {
+            // Green tint for completion - celebrate!
+            *bg_color = BackgroundColor(Color::srgb(0.6, 0.9, 0.6));
+        } else if conflict_set.contains(&(cell.row, cell.col)) {
+            // Red tint for conflicts - show mistakes
+            *bg_color = BackgroundColor(Color::srgb(1.0, 0.7, 0.7));
+        } else {
+            // Normal alternating colors for the sudoku boxes
+            *bg_color = BackgroundColor(base_color);
         }
     }
 }
@@ -238,6 +269,8 @@ impl Plugin for UiPlugin {
                 Update,
                 (
                     update_cell_text.run_if(resource_changed::<BoardState>)
+                        .run_if(in_state(AppState::Ready)),
+                    update_cell_colors.run_if(resource_changed::<BoardState>)
                         .run_if(in_state(AppState::Ready)),
                     transition_to_ready.run_if(in_state(AppState::Loading)),
                 ),
