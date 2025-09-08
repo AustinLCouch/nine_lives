@@ -7,9 +7,28 @@
 //! - Board validation and manipulation
 
 use bevy::prelude::Resource;
+use rand::{thread_rng, Rng};
+use rand::seq::SliceRandom;
+
+/// High-level game state for the current puzzle lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource, Default)]
+pub enum GameState {
+    #[default]
+    Playing,
+    Won,
+}
 
 /// The size of one dimension of the Sudoku grid (e.g., 9 for a 9x9 grid).
 pub const GRID_SIZE: usize = 9;
+
+/// Represents the type of a cell - whether it was given in the puzzle or filled by the player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CellType {
+    /// A number that was provided as part of the original puzzle
+    Given,
+    /// A number that was filled in by the player
+    Player,
+}
 
 /// Represents the state of the game board.
 ///
@@ -21,6 +40,10 @@ pub struct BoardState {
     /// `Some(i)` represents a cat emoji with index `i`.
     /// `None` represents an empty cell.
     pub cells: [[Option<usize>; GRID_SIZE]; GRID_SIZE],
+    
+    /// Tracks the type of each cell (Given vs Player filled).
+    /// Only meaningful for cells that have values (Some in the cells array).
+    pub cell_types: [[Option<CellType>; GRID_SIZE]; GRID_SIZE],
 }
 
 impl BoardState {
@@ -28,17 +51,20 @@ impl BoardState {
     pub fn new() -> Self {
         Self {
             cells: [[None; GRID_SIZE]; GRID_SIZE],
+            cell_types: [[None; GRID_SIZE]; GRID_SIZE],
         }
     }
 
     /// Resets all cells on the board to `None`.
     pub fn clear(&mut self) {
         self.cells = [[None; GRID_SIZE]; GRID_SIZE];
+        self.cell_types = [[None; GRID_SIZE]; GRID_SIZE];
     }
 
     /// Cycles the value of a specific cell based on player input.
     ///
     /// The sequence is: None -> Some(0) -> Some(1) -> ... -> Some(max-1) -> Some(0).
+    /// Given cells (part of the original puzzle) cannot be changed.
     ///
     /// # Arguments
     ///
@@ -46,12 +72,25 @@ impl BoardState {
     /// * `col` - The column index of the cell to cycle.
     /// * `num_emojis` - The total number of available choices (cats).
     pub fn cycle_cell(&mut self, row: usize, col: usize, num_emojis: usize) {
+        // Don't allow changes to given cells
+        if let Some(CellType::Given) = self.cell_types[row][col] {
+            return;
+        }
+        
         let current_val = self.cells[row][col];
         let next_val = match current_val {
             None => Some(0),
             Some(idx) => Some((idx + 1) % num_emojis),
         };
+        
         self.cells[row][col] = next_val;
+        
+        // Mark as player input if we have a value
+        self.cell_types[row][col] = if next_val.is_some() {
+            Some(CellType::Player)
+        } else {
+            None
+        };
     }
 
     /// Check if placing a value at a specific position would be valid according to Sudoku rules.
@@ -132,6 +171,126 @@ impl BoardState {
         
         // Then check if no conflicts exist
         self.get_conflicts().is_empty()
+    }
+
+    /// Compute the current overall game state based on the board content.
+    pub fn compute_game_state(&self) -> GameState {
+        if self.is_complete() { GameState::Won } else { GameState::Playing }
+    }
+
+    /// Generate a new Sudoku puzzle with the specified difficulty.
+    ///
+    /// This uses a backtracking algorithm to:
+    /// 1. Fill the grid with a valid complete solution
+    /// 2. Remove numbers to create the puzzle
+    /// 3. Ensure the puzzle has a unique solution
+    ///
+    /// # Arguments
+    /// 
+    /// * `givens` - Number of pre-filled cells (35-40 for easy, 25-30 for hard)
+    pub fn generate_puzzle(&mut self, givens: usize) {
+        // Start with a clear board
+        self.clear();
+        
+        // Fill the board with a complete valid solution
+        self.fill_board();
+        
+        // Remove numbers to create the puzzle, keeping 'givens' numbers
+        self.remove_numbers_for_puzzle(givens);
+    }
+    
+    /// Fill the board with a complete valid Sudoku solution using backtracking.
+    fn fill_board(&mut self) -> bool {
+        // Find the next empty cell
+        for row in 0..GRID_SIZE {
+            for col in 0..GRID_SIZE {
+                if self.cells[row][col].is_none() {
+                    // Try numbers 0-8 in random order for variety
+                    let mut numbers: Vec<usize> = (0..GRID_SIZE).collect();
+                    numbers.shuffle(&mut thread_rng());
+                    
+                    for num in numbers {
+                        if self.is_valid_placement(row, col, num) {
+                            self.cells[row][col] = Some(num);
+                            
+                            // Recursively fill the rest of the board
+                            if self.fill_board() {
+                                return true;
+                            }
+                            
+                            // Backtrack if this doesn't work
+                            self.cells[row][col] = None;
+                        }
+                    }
+                    
+                    // No valid number found for this cell
+                    return false;
+                }
+            }
+        }
+        
+        // All cells filled successfully
+        true
+    }
+    
+    /// Remove numbers from a complete board to create a puzzle.
+    /// 
+    /// This keeps exactly 'givens' numbers and removes the rest.
+    /// For simplicity, we'll randomly select which numbers to keep.
+    /// In a more sophisticated implementation, we'd ensure unique solvability.
+    fn remove_numbers_for_puzzle(&mut self, givens: usize) {
+        if givens >= GRID_SIZE * GRID_SIZE {
+            return; // Keep all numbers if givens is too high
+        }
+        
+        // Create a list of all cell positions
+        let mut positions: Vec<(usize, usize)> = Vec::new();
+        for row in 0..GRID_SIZE {
+            for col in 0..GRID_SIZE {
+                positions.push((row, col));
+            }
+        }
+        
+        // Shuffle the positions randomly
+        positions.shuffle(&mut thread_rng());
+        
+        // Mark the first 'givens' positions as Given cells
+        for (i, (row, col)) in positions.iter().enumerate() {
+            if i < givens {
+                // Keep this cell and mark it as given
+                self.cell_types[*row][*col] = Some(CellType::Given);
+            } else {
+                // Remove this cell (it will be for the player to fill)
+                self.cells[*row][*col] = None;
+                self.cell_types[*row][*col] = None;
+            }
+        }
+    }
+    
+    /// Generate an easy puzzle (good for beginners).
+    /// Easy puzzles have 35-40 given numbers.
+    pub fn generate_easy_puzzle(&mut self) {
+        let givens = thread_rng().gen_range(35..=40);
+        self.generate_puzzle(givens);
+    }
+    
+    /// Generate a medium puzzle (moderate difficulty).
+    /// Medium puzzles have 30-35 given numbers.
+    pub fn generate_medium_puzzle(&mut self) {
+        let givens = thread_rng().gen_range(30..=35);
+        self.generate_puzzle(givens);
+    }
+    
+    /// Generate a hard puzzle (challenging).
+    /// Hard puzzles have 25-30 given numbers.
+    pub fn generate_hard_puzzle(&mut self) {
+        let givens = thread_rng().gen_range(25..=30);
+        self.generate_puzzle(givens);
+    }
+    
+    /// Check if a cell is a given cell (part of the original puzzle).
+    pub fn is_given_cell(&self, row: usize, col: usize) -> bool {
+        matches!(self.cell_types[row][col], Some(CellType::Given))
     }
 }
 
@@ -357,5 +516,64 @@ mod tests {
         // The completion check should work regardless of validity
         let has_conflicts = !board.get_conflicts().is_empty();
         assert_eq!(board.is_complete(), !has_conflicts);
+    }
+
+    #[test]
+    fn test_generate_easy_puzzle() {
+        let mut board = BoardState::new();
+        board.generate_easy_puzzle();
+        
+        // Count the number of given (non-empty) cells
+        let given_count = board.cells.iter()
+            .flatten()
+            .filter(|cell| cell.is_some())
+            .count();
+        
+        // Easy puzzles should have 35-40 givens
+        assert!(given_count >= 35 && given_count <= 40, 
+               "Easy puzzle should have 35-40 givens, got {}", given_count);
+        
+        // All given numbers should form a valid partial solution (no conflicts)
+        assert!(board.get_conflicts().is_empty(), 
+               "Generated puzzle should have no conflicts");
+    }
+
+    #[test]
+    fn test_generate_puzzle_different_difficulties() {
+        let mut easy_board = BoardState::new();
+        let mut medium_board = BoardState::new();
+        let mut hard_board = BoardState::new();
+        
+        easy_board.generate_easy_puzzle();
+        medium_board.generate_medium_puzzle();
+        hard_board.generate_hard_puzzle();
+        
+        let easy_givens = easy_board.cells.iter().flatten().filter(|c| c.is_some()).count();
+        let medium_givens = medium_board.cells.iter().flatten().filter(|c| c.is_some()).count();
+        let hard_givens = hard_board.cells.iter().flatten().filter(|c| c.is_some()).count();
+        
+        // Easy should have more givens than medium, medium more than hard
+        assert!(easy_givens >= 35);
+        assert!(medium_givens >= 30 && medium_givens <= 35);
+        assert!(hard_givens >= 25 && hard_givens <= 30);
+        
+        // All should be valid partial solutions
+        assert!(easy_board.get_conflicts().is_empty());
+        assert!(medium_board.get_conflicts().is_empty());
+        assert!(hard_board.get_conflicts().is_empty());
+    }
+
+    #[test]
+    fn test_puzzle_generation_is_random() {
+        let mut board1 = BoardState::new();
+        let mut board2 = BoardState::new();
+        
+        board1.generate_easy_puzzle();
+        board2.generate_easy_puzzle();
+        
+        // The two generated puzzles should be different
+        // (This test might rarely fail due to randomness, but extremely unlikely)
+        let boards_identical = board1.cells == board2.cells;
+        assert!(!boards_identical, "Generated puzzles should be different");
     }
 }

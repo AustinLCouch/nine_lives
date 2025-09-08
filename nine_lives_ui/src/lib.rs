@@ -8,7 +8,7 @@
 //! - Application states
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GRID_SIZE};
+use nine_lives_core::{BoardState, GRID_SIZE, GameState};
 use std::collections::HashSet;
 
 // --- UI Components ---
@@ -23,6 +23,10 @@ pub struct Cell {
 /// A component to tag the "Clear Board" button entity.
 #[derive(Component)]
 pub struct ClearButton;
+
+/// A component to tag the "New Game" button entity.
+#[derive(Component)]
+pub struct NewGameButton;
 
 // --- UI Resources ---
 
@@ -82,12 +86,12 @@ pub fn update_cell_text(
     board: Res<BoardState>,
     cat_emojis: Res<CatEmojis>,
     cell_query: Query<(&Cell, &Children)>,
-    mut text_query: Query<&mut Text>,
+    mut text_query: Query<(&mut Text, &mut TextColor)>,
 ) {
     for (cell, children) in &cell_query {
         // Get the first child of the cell, which should be the Text entity.
         if let Some(text_entity) = children.iter().next() {
-            if let Ok(mut text) = text_query.get_mut(text_entity) {
+            if let Ok((mut text, mut color)) = text_query.get_mut(text_entity) {
                 let new_text_value = match board.cells[cell.row][cell.col] {
                     Some(idx) => cat_emojis.emojis[idx].clone(),
                     None => " ".to_string(), // Empty cells are just blank.
@@ -96,6 +100,15 @@ pub fn update_cell_text(
                 // Only update the text if it has actually changed.
                 if text.0 != new_text_value {
                     text.0 = new_text_value;
+                }
+
+                // Style: Given numbers are darker and bolder, player numbers are blue-ish
+                if board.is_given_cell(cell.row, cell.col) {
+                    // Dark text for givens
+                    color.0 = Color::srgb(0.1, 0.1, 0.1);
+                } else {
+                    // Blue-ish for player entries
+                    color.0 = Color::srgb(0.0, 0.2, 0.6);
                 }
             }
         }
@@ -110,11 +123,12 @@ pub fn update_cell_text(
 /// - Using normal colors otherwise
 pub fn update_cell_colors(
     board: Res<BoardState>,
+    game_state: Res<GameState>,
     mut cell_query: Query<(&Cell, &mut BackgroundColor)>,
 ) {
     let conflicts = board.get_conflicts();
     let conflict_set: HashSet<(usize, usize)> = conflicts.into_iter().collect();
-    let is_complete = board.is_complete();
+    let is_complete = matches!(*game_state, GameState::Won);
     
     for (cell, mut bg_color) in &mut cell_query {
         let base_color = get_cell_background_color(cell.row, cell.col);
@@ -128,6 +142,56 @@ pub fn update_cell_colors(
         } else {
             // Normal alternating colors for the sudoku boxes
             *bg_color = BackgroundColor(base_color);
+        }
+    }
+}
+
+/// System to add hover effects to buttons for better user feedback.
+pub fn update_button_colors(
+    mut new_game_query: Query<(&Interaction, &mut BackgroundColor), (With<NewGameButton>, Changed<Interaction>)>,
+    mut clear_query: Query<(&Interaction, &mut BackgroundColor), (With<ClearButton>, Changed<Interaction>, Without<NewGameButton>)>,
+) {
+    // Handle New Game button (green theme)
+    for (interaction, mut bg_color) in &mut new_game_query {
+        match interaction {
+            Interaction::Pressed => bg_color.0 = Color::srgb(0.2, 0.4, 0.2),
+            Interaction::Hovered => bg_color.0 = Color::srgb(0.4, 0.7, 0.4),
+            Interaction::None => bg_color.0 = Color::srgb(0.3, 0.6, 0.3),
+        }
+    }
+    
+    // Handle Clear button (red theme)
+    for (interaction, mut bg_color) in &mut clear_query {
+        match interaction {
+            Interaction::Pressed => bg_color.0 = Color::srgb(0.4, 0.2, 0.2),
+            Interaction::Hovered => bg_color.0 = Color::srgb(0.7, 0.4, 0.4),
+            Interaction::None => bg_color.0 = Color::srgb(0.6, 0.3, 0.3),
+        }
+    }
+}
+
+/// System to add subtle hover effects to game cells.
+pub fn update_cell_hover_effects(
+    board: Res<BoardState>,
+    mut cell_query: Query<(&Cell, &Interaction, &mut BorderColor), (With<Button>, Changed<Interaction>)>,
+) {
+    for (cell, interaction, mut border_color) in &mut cell_query {
+        match interaction {
+            Interaction::Hovered => {
+                // Only show hover on cells that can be changed (not given cells)
+                if !board.is_given_cell(cell.row, cell.col) {
+                    border_color.0 = Color::srgb(0.8, 0.8, 1.0); // Light blue hover
+                } else {
+                    border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Keep normal for given cells
+                }
+            }
+            Interaction::None => {
+                border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Normal border
+            }
+            Interaction::Pressed => {
+                // Handled by the cell click system in the controller
+                border_color.0 = Color::srgb(0.4, 0.4, 0.4);
+            }
         }
     }
 }
@@ -213,32 +277,73 @@ pub fn setup_grid(mut commands: Commands) {
                     }
                 });
 
-            // Clear button
+            // Buttons container
             parent
                 .spawn((
-                    Button,
-                    ClearButton,
                     Node {
-                        width: Val::Px(150.0),
-                        height: Val::Px(40.0),
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Row,
+                        column_gap: Val::Px(20.0),
+                        margin: UiRect::top(Val::Px(20.0)),
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
-                        margin: UiRect::top(Val::Px(20.0)),
-                        border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.6, 0.3, 0.3)),
-                    BorderColor(Color::srgb(0.8, 0.4, 0.4)),
                 ))
-                .with_children(|button_parent| {
-                    button_parent.spawn((
-                        Text::new("Clear Board"),
-                        TextFont {
-                            font_size: 16.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
+                .with_children(|buttons_parent| {
+                    // New Game button
+                    buttons_parent
+                        .spawn((
+                            Button,
+                            NewGameButton,
+                            Node {
+                                width: Val::Px(150.0),
+                                height: Val::Px(40.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                border: UiRect::all(Val::Px(2.0)),
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.3, 0.6, 0.3)),
+                            BorderColor(Color::srgb(0.4, 0.8, 0.4)),
+                        ))
+                        .with_children(|button_parent| {
+                            button_parent.spawn((
+                                Text::new("New Game"),
+                                TextFont {
+                                    font_size: 16.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                            ));
+                        });
+
+                    // Clear button
+                    buttons_parent
+                        .spawn((
+                            Button,
+                            ClearButton,
+                            Node {
+                                width: Val::Px(150.0),
+                                height: Val::Px(40.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                border: UiRect::all(Val::Px(2.0)),
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.6, 0.3, 0.3)),
+                            BorderColor(Color::srgb(0.8, 0.4, 0.4)),
+                        ))
+                        .with_children(|button_parent| {
+                            button_parent.spawn((
+                                Text::new("Clear Board"),
+                                TextFont {
+                                    font_size: 16.0,
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                            ));
+                        });
                 });
         });
 
@@ -270,8 +375,11 @@ impl Plugin for UiPlugin {
                 (
                     update_cell_text.run_if(resource_changed::<BoardState>)
                         .run_if(in_state(AppState::Ready)),
-                    update_cell_colors.run_if(resource_changed::<BoardState>)
+                    update_cell_colors
+                        .run_if(|b: Res<BoardState>, s: Res<GameState>| b.is_changed() || s.is_changed())
                         .run_if(in_state(AppState::Ready)),
+                    update_button_colors.run_if(in_state(AppState::Ready)),
+                    update_cell_hover_effects.run_if(in_state(AppState::Ready)),
                     transition_to_ready.run_if(in_state(AppState::Loading)),
                 ),
             );

@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 # Minimal Bevy for Resource derive
 bevy = { version = "0.16.1", default-features = false }
+# Random number generation for puzzle creation
+rand = "0.8"

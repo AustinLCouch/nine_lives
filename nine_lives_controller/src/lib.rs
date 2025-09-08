@@ -9,8 +9,8 @@
 //! - Connecting model and view layers
 
 use bevy::prelude::*;
-use nine_lives_core::BoardState;
-use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton};
+use nine_lives_core::{BoardState, GameState};
+use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton};
 
 // --- Controller Systems ---
 
@@ -42,6 +42,27 @@ pub fn clear_button_system(
     }
 }
 
+/// A system that handles clicks on the "New Game" button. This generates a fresh puzzle.
+pub fn new_game_button_system(
+    mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<NewGameButton>)>,
+    mut board: ResMut<BoardState>,
+) {
+    for interaction in &mut interaction_query {
+        if *interaction == Interaction::Pressed {
+            // Generate a new easy puzzle (perfect for beginners)
+            board.generate_easy_puzzle();
+            println!("Generated new puzzle!");
+        }
+    }
+}
+
+/// Keeps GameState in sync with BoardState when it changes.
+pub fn game_state_system(board: Res<BoardState>, mut state: ResMut<GameState>) {
+    if board.is_changed() {
+        *state = board.compute_game_state();
+    }
+}
+
 /// Adds controller systems to the provided Bevy App.
 pub fn add_controller(app: &mut App) {
     app.add_systems(
@@ -49,6 +70,8 @@ pub fn add_controller(app: &mut App) {
         (
             cell_click_system,
             clear_button_system,
+            new_game_button_system,
+            game_state_system,
         )
             .run_if(in_state(AppState::Ready)),
     );
@@ -73,6 +96,7 @@ pub fn run_game() {
         }))
         // Initialize the core game state from the model layer
         .init_resource::<BoardState>()
+        .init_resource::<GameState>()
         // Add the UI layer (view)
         .add_plugins(nine_lives_ui::UiPlugin)
         // Add controller systems
@@ -81,6 +105,8 @@ pub fn run_game() {
             (
                 cell_click_system,
                 clear_button_system,
+                new_game_button_system,
+                game_state_system,
             )
                 .run_if(in_state(AppState::Ready)),
         )
