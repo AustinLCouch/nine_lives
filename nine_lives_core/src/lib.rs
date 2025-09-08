@@ -9,6 +9,7 @@
 use bevy::prelude::Resource;
 use rand::seq::SliceRandom;
 use rand::{Rng, thread_rng};
+use std::collections::VecDeque;
 
 /// High-level game state for the current puzzle lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Resource, Default)]
@@ -16,6 +17,282 @@ pub enum GameState {
     #[default]
     Playing,
     Won,
+    Paused,
+}
+
+/// Game timing and move tracking information.
+#[derive(Debug, Clone, Resource)]
+pub struct GameSession {
+    pub started_at: std::time::Instant,
+    pub elapsed_time: std::time::Duration,
+    pub move_count: usize,
+    pub is_paused: bool,
+    pub pause_start: Option<std::time::Instant>,
+}
+
+impl Default for GameSession {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GameSession {
+    pub fn new() -> Self {
+        Self {
+            started_at: std::time::Instant::now(),
+            elapsed_time: std::time::Duration::ZERO,
+            move_count: 0,
+            is_paused: false,
+            pause_start: None,
+        }
+    }
+
+    pub fn pause(&mut self) {
+        if !self.is_paused {
+            self.is_paused = true;
+            self.pause_start = Some(std::time::Instant::now());
+        }
+    }
+
+    pub fn resume(&mut self) {
+        if let Some(_pause_start) = self.pause_start.take() {
+            self.is_paused = false;
+            // Don't add paused time to elapsed time
+        }
+    }
+
+    pub fn increment_move(&mut self) {
+        self.move_count += 1;
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    pub fn current_elapsed(&self) -> std::time::Duration {
+        if self.is_paused {
+            self.elapsed_time
+        } else {
+            self.elapsed_time + self.started_at.elapsed()
+        }
+    }
+}
+
+/// Represents a single move in the game for undo/redo functionality.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Move {
+    pub row: usize,
+    pub col: usize,
+    pub old_value: Option<usize>,
+    pub new_value: Option<usize>,
+    pub timestamp: std::time::Instant,
+}
+
+/// Game history for undo/redo functionality.
+/// Uses a deque for efficient operations at both ends.
+#[derive(Debug, Clone, Resource)]
+pub struct GameHistory {
+    pub moves: VecDeque<Move>,
+    pub undo_index: usize, // Index pointing to the "current" state
+    pub max_history: usize, // Maximum number of moves to remember
+}
+
+impl Default for GameHistory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GameHistory {
+    pub fn new() -> Self {
+        Self {
+            moves: VecDeque::new(),
+            undo_index: 0,
+            max_history: 100, // Remember last 100 moves
+        }
+    }
+
+    /// Add a new move to the history. This clears any "future" moves if we were in the middle of undo/redo.
+    pub fn add_move(&mut self, game_move: Move) {
+        // If we're not at the end of history, truncate everything after current position
+        while self.moves.len() > self.undo_index {
+            self.moves.pop_back();
+        }
+
+        // Add the new move
+        self.moves.push_back(game_move);
+        self.undo_index = self.moves.len();
+
+        // Keep history within bounds
+        while self.moves.len() > self.max_history {
+            self.moves.pop_front();
+            if self.undo_index > 0 {
+                self.undo_index -= 1;
+            }
+        }
+    }
+
+    /// Check if undo is possible.
+    pub fn can_undo(&self) -> bool {
+        self.undo_index > 0
+    }
+
+    /// Check if redo is possible.
+    pub fn can_redo(&self) -> bool {
+        self.undo_index < self.moves.len()
+    }
+
+    /// Get the move to undo (without applying it).
+    pub fn peek_undo(&self) -> Option<&Move> {
+        if self.can_undo() {
+            self.moves.get(self.undo_index - 1)
+        } else {
+            None
+        }
+    }
+
+    /// Get the move to redo (without applying it).
+    pub fn peek_redo(&self) -> Option<&Move> {
+        if self.can_redo() {
+            self.moves.get(self.undo_index)
+        } else {
+            None
+        }
+    }
+
+    /// Mark that we've undone a move (moves the index back).
+    pub fn mark_undone(&mut self) {
+        if self.can_undo() {
+            self.undo_index -= 1;
+        }
+    }
+
+    /// Mark that we've redone a move (moves the index forward).
+    pub fn mark_redone(&mut self) {
+        if self.can_redo() {
+            self.undo_index += 1;
+        }
+    }
+
+    /// Clear all history.
+    pub fn clear(&mut self) {
+        self.moves.clear();
+        self.undo_index = 0;
+    }
+
+    /// Get current position info for display ("Move 5/10" format).
+    pub fn position_info(&self) -> (usize, usize) {
+        (self.undo_index, self.moves.len())
+    }
+}
+
+/// Stores the complete solution to the current puzzle for hint generation.
+#[derive(Debug, Clone, Resource)]
+pub struct Solution {
+    pub cells: [[usize; GRID_SIZE]; GRID_SIZE],
+}
+
+impl Solution {
+    pub fn new() -> Self {
+        Self {
+            cells: [[0; GRID_SIZE]; GRID_SIZE],
+        }
+    }
+
+    /// Create solution from a complete board state.
+    pub fn from_board(board: &BoardState) -> Option<Self> {
+        // Check if board is complete and valid
+        if !board.is_complete() {
+            return None;
+        }
+
+        let mut solution = Self::new();
+        for row in 0..GRID_SIZE {
+            for col in 0..GRID_SIZE {
+                if let Some(value) = board.cells[row][col] {
+                    solution.cells[row][col] = value;
+                } else {
+                    return None; // Board not complete
+                }
+            }
+        }
+        Some(solution)
+    }
+}
+
+impl Default for Solution {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Hint system configuration and state.
+#[derive(Debug, Clone, Resource)]
+pub struct HintSystem {
+    pub hints_remaining: usize,
+    pub max_hints: usize,
+}
+
+impl HintSystem {
+    pub fn new(max_hints: usize) -> Self {
+        Self {
+            hints_remaining: max_hints,
+            max_hints,
+        }
+    }
+
+    /// Reset hints for a new game.
+    pub fn reset(&mut self, max_hints: usize) {
+        self.max_hints = max_hints;
+        self.hints_remaining = max_hints;
+    }
+
+    /// Use a hint if available.
+    pub fn use_hint(&mut self) -> bool {
+        if self.hints_remaining > 0 {
+            self.hints_remaining -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if hints are available.
+    pub fn can_use_hint(&self) -> bool {
+        self.hints_remaining > 0
+    }
+}
+
+impl Default for HintSystem {
+    fn default() -> Self {
+        Self::new(3) // Default to 3 hints
+    }
+}
+
+/// Get the next best hint for the player.
+/// Returns (row, col, correct_value) if a hint is available.
+pub fn get_next_hint(board: &BoardState, solution: &Solution) -> Option<(usize, usize, usize)> {
+    // Find empty cells that could be filled
+    let mut candidates = Vec::new();
+    
+    for row in 0..GRID_SIZE {
+        for col in 0..GRID_SIZE {
+            // Only hint for empty cells that are not given cells
+            if board.cells[row][col].is_none() && !board.is_given_cell(row, col) {
+                let correct_value = solution.cells[row][col];
+                candidates.push((row, col, correct_value));
+            }
+        }
+    }
+    
+    // Return a random candidate (to make hints less predictable)
+    if !candidates.is_empty() {
+        let mut rng = thread_rng();
+        let choice = candidates.choose(&mut rng)?;
+        Some(*choice)
+    } else {
+        None
+    }
 }
 
 /// The size of one dimension of the Sudoku grid (e.g., 9 for a 9x9 grid).
@@ -62,6 +339,7 @@ impl BoardState {
     }
 
     /// Cycles the value of a specific cell based on player input.
+    /// Returns the Move that was made, or None if no change occurred.
     ///
     /// The sequence is: None -> Some(0) -> Some(1) -> ... -> Some(max-1) -> Some(0).
     /// Given cells (part of the original puzzle) cannot be changed.
@@ -71,26 +349,40 @@ impl BoardState {
     /// * `row` - The row index of the cell to cycle.
     /// * `col` - The column index of the cell to cycle.
     /// * `num_emojis` - The total number of available choices (cats).
-    pub fn cycle_cell(&mut self, row: usize, col: usize, num_emojis: usize) {
+    pub fn cycle_cell(&mut self, row: usize, col: usize, num_emojis: usize) -> Option<Move> {
         // Don't allow changes to given cells
         if let Some(CellType::Given) = self.cell_types[row][col] {
-            return;
+            return None;
         }
 
-        let current_val = self.cells[row][col];
-        let next_val = match current_val {
+        let old_value = self.cells[row][col];
+        let new_value = match old_value {
             None => Some(0),
             Some(idx) => Some((idx + 1) % num_emojis),
         };
 
-        self.cells[row][col] = next_val;
+        // Only proceed if there's actually a change
+        if old_value == new_value {
+            return None;
+        }
+
+        self.cells[row][col] = new_value;
 
         // Mark as player input if we have a value
-        self.cell_types[row][col] = if next_val.is_some() {
+        self.cell_types[row][col] = if new_value.is_some() {
             Some(CellType::Player)
         } else {
             None
         };
+
+        // Return the move for history tracking
+        Some(Move {
+            row,
+            col,
+            old_value,
+            new_value,
+            timestamp: std::time::Instant::now(),
+        })
     }
 
     /// Check if placing a value at a specific position would be valid according to Sudoku rules.
@@ -183,24 +475,30 @@ impl BoardState {
     }
 
     /// Generate a new Sudoku puzzle with the specified difficulty.
+    /// Returns the solution for hint generation.
     ///
     /// This uses a backtracking algorithm to:
     /// 1. Fill the grid with a valid complete solution
-    /// 2. Remove numbers to create the puzzle
-    /// 3. Ensure the puzzle has a unique solution
+    /// 2. Store the solution 
+    /// 3. Remove numbers to create the puzzle
     ///
     /// # Arguments
     ///
     /// * `givens` - Number of pre-filled cells (35-40 for easy, 25-30 for hard)
-    pub fn generate_puzzle(&mut self, givens: usize) {
+    pub fn generate_puzzle(&mut self, givens: usize) -> Solution {
         // Start with a clear board
         self.clear();
 
         // Fill the board with a complete valid solution
         self.fill_board();
 
+        // Store the complete solution before removing numbers
+        let solution = Solution::from_board(self).unwrap_or_default();
+
         // Remove numbers to create the puzzle, keeping 'givens' numbers
         self.remove_numbers_for_puzzle(givens);
+        
+        solution
     }
 
     /// Fill the board with a complete valid Sudoku solution using backtracking.
@@ -273,28 +571,62 @@ impl BoardState {
 
     /// Generate an easy puzzle (good for beginners).
     /// Easy puzzles have 35-40 given numbers.
-    pub fn generate_easy_puzzle(&mut self) {
+    pub fn generate_easy_puzzle(&mut self) -> Solution {
         let givens = thread_rng().gen_range(35..=40);
-        self.generate_puzzle(givens);
+        self.generate_puzzle(givens)
     }
 
     /// Generate a medium puzzle (moderate difficulty).
     /// Medium puzzles have 30-35 given numbers.
-    pub fn generate_medium_puzzle(&mut self) {
+    pub fn generate_medium_puzzle(&mut self) -> Solution {
         let givens = thread_rng().gen_range(30..=35);
-        self.generate_puzzle(givens);
+        self.generate_puzzle(givens)
     }
 
     /// Generate a hard puzzle (challenging).
     /// Hard puzzles have 25-30 given numbers.
-    pub fn generate_hard_puzzle(&mut self) {
+    pub fn generate_hard_puzzle(&mut self) -> Solution {
         let givens = thread_rng().gen_range(25..=30);
-        self.generate_puzzle(givens);
+        self.generate_puzzle(givens)
     }
 
     /// Check if a cell is a given cell (part of the original puzzle).
     pub fn is_given_cell(&self, row: usize, col: usize) -> bool {
         matches!(self.cell_types[row][col], Some(CellType::Given))
+    }
+
+    /// Apply a move to the board (used for undo/redo).
+    pub fn apply_move(&mut self, game_move: &Move) {
+        // Don't allow changes to given cells (safety check)
+        if let Some(CellType::Given) = self.cell_types[game_move.row][game_move.col] {
+            return;
+        }
+
+        self.cells[game_move.row][game_move.col] = game_move.new_value;
+        
+        // Update cell type
+        self.cell_types[game_move.row][game_move.col] = if game_move.new_value.is_some() {
+            Some(CellType::Player)
+        } else {
+            None
+        };
+    }
+
+    /// Undo a move (reverse it).
+    pub fn undo_move(&mut self, game_move: &Move) {
+        // Don't allow changes to given cells (safety check)
+        if let Some(CellType::Given) = self.cell_types[game_move.row][game_move.col] {
+            return;
+        }
+
+        self.cells[game_move.row][game_move.col] = game_move.old_value;
+        
+        // Update cell type
+        self.cell_types[game_move.row][game_move.col] = if game_move.old_value.is_some() {
+            Some(CellType::Player)
+        } else {
+            None
+        };
     }
 }
 
