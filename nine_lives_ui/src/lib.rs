@@ -102,13 +102,13 @@ pub fn update_cell_text(
                     text.0 = new_text_value;
                 }
 
-                // Style: Given numbers are darker and bolder, player numbers are blue-ish
+                // Style: Given numbers are much darker and bolder, player numbers are bright blue
                 if board.is_given_cell(cell.row, cell.col) {
-                    // Dark text for givens
-                    color.0 = Color::srgb(0.1, 0.1, 0.1);
+                    // Very dark, almost black text for givens (permanent puzzle numbers)
+                    color.0 = Color::srgb(0.0, 0.0, 0.0);
                 } else {
-                    // Blue-ish for player entries
-                    color.0 = Color::srgb(0.0, 0.2, 0.6);
+                    // Bright blue for player entries (clearly different)
+                    color.0 = Color::srgb(0.1, 0.3, 0.8);
                 }
             }
         }
@@ -139,8 +139,19 @@ pub fn update_cell_colors(
         } else if conflict_set.contains(&(cell.row, cell.col)) {
             // Red tint for conflicts - show mistakes
             *bg_color = BackgroundColor(Color::srgb(1.0, 0.7, 0.7));
+        } else if board.is_given_cell(cell.row, cell.col) {
+            // Slightly darker/more solid background for given cells (permanent puzzle numbers)
+            // Convert to linear space, darken, then back to sRGB
+            let [r, g, b, a] = base_color.to_linear().to_f32_array();
+            let darker_base = Color::linear_rgba(
+                r * 0.7,   // Make significantly darker (30% of original)
+                g * 0.7,
+                b * 0.7,
+                a
+            );
+            *bg_color = BackgroundColor(darker_base);
         } else {
-            // Normal alternating colors for the sudoku boxes
+            // Normal alternating colors for player-fillable cells
             *bg_color = BackgroundColor(base_color);
         }
     }
@@ -178,19 +189,27 @@ pub fn update_cell_hover_effects(
     for (cell, interaction, mut border_color) in &mut cell_query {
         match interaction {
             Interaction::Hovered => {
-                // Only show hover on cells that can be changed (not given cells)
+                // Only show interactive hover on cells that can be changed (not given cells)
                 if !board.is_given_cell(cell.row, cell.col) {
-                    border_color.0 = Color::srgb(0.8, 0.8, 1.0); // Light blue hover
+                    border_color.0 = Color::srgb(0.2, 0.6, 1.0); // Bright blue hover for player cells
                 } else {
-                    border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Keep normal for given cells
+                    border_color.0 = Color::srgb(0.6, 0.6, 0.6); // Darker border to show it's not interactive
                 }
             }
             Interaction::None => {
-                border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Normal border
+                if board.is_given_cell(cell.row, cell.col) {
+                    border_color.0 = Color::srgb(0.3, 0.3, 0.3); // Darker borders for given cells
+                } else {
+                    border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Normal border for player cells
+                }
             }
             Interaction::Pressed => {
                 // Handled by the cell click system in the controller
-                border_color.0 = Color::srgb(0.4, 0.4, 0.4);
+                if board.is_given_cell(cell.row, cell.col) {
+                    border_color.0 = Color::srgb(0.3, 0.3, 0.3); // Keep darker for given cells
+                } else {
+                    border_color.0 = Color::srgb(0.4, 0.4, 0.4); // Normal for player cells
+                }
             }
         }
     }
