@@ -2,6 +2,12 @@
 target = "index.html"
 dist = "dist"
 public_url = "."
+filehash = false
+
+[tools.rust]
+features = ["web"]
+package = "nine_lives_controller"
+bin = "nine_lives"
 
 [serve]
 address = "127.0.0.1"

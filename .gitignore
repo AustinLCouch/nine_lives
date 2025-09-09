@@ -1,6 +1,25 @@
+# Build artifacts
 /target
 /dist
+**/dist/
+
+# Web build artifacts
 /web/*.wasm
 /web/*.js
+*.wasm
+*.js
+*.html.bak
 
+# Trunk build output (generated files)
+nine_lives-*.js
+nine_lives-*.wasm
+nine_lives_*.js
+nine_lives_*.wasm
+
+# OS and editor files
+.DS_Store
+.vscode/
+.idea/
+
+# WARP.md files
 **/WARP.md

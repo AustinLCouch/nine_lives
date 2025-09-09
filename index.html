@@ -33,8 +33,19 @@
             display: none;
         }
     </style>
-    <link data-trunk rel="rust" data-bin="nine_lives" data-cargo-features="web" data-cargo-package="nine_lives_controller"/>
-</head>
+    
+<script type="module">
+import init, * as bindings from '/nine_lives-ea10c56c9c33559c.js';
+const wasm = await init({ module_or_path: '/nine_lives-ea10c56c9c33559c_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+<link rel="modulepreload" href="/nine_lives-ea10c56c9c33559c.js" crossorigin="anonymous" integrity="sha384-bVE9qlqnCS7tkQOkfGAvKZIoE3ESY8KQodNmK+4rxxks/erkE8hyd0WWoDdDkNQN"><link rel="preload" href="/nine_lives-ea10c56c9c33559c_bg.wasm" crossorigin="anonymous" integrity="sha384-0TzyuVNprW5JhK1D5dj3czI8f6ak36IWG9kUsSPWquVO/ezLQqQh1R/laclbDL0P" as="fetch" type="application/wasm"></head>
 <body>
     <div id="loading">
         <h2>🐱 Nine Lives: Cat Sudoku 🐱</h2>

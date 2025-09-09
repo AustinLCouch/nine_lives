@@ -58,10 +58,9 @@ pub struct PuzzleSettings {
     pub difficulty: Difficulty,
     pub require_unique_solution: bool,
     pub givens_range: (usize, usize), // min, max clues to place
-    pub seed: Option<u64>, // for reproducible generation
+    pub seed: Option<u64>,            // for reproducible generation
     pub hints_allowed: bool,
     pub max_hints: usize,
-    
     // Phase 2 placeholders (not yet implemented)
     // pub symmetry: Symmetry,
     // pub variants: Vec<Variant>,
@@ -113,7 +112,7 @@ impl PuzzleSettings {
             },
         }
     }
-    
+
     /// Get a human-readable description of these settings.
     pub fn description(&self) -> String {
         let difficulty_str = match self.difficulty {
@@ -122,18 +121,26 @@ impl PuzzleSettings {
             Difficulty::Hard => "Hard",
             Difficulty::Expert => "Expert",
         };
-        
-        let unique_str = if self.require_unique_solution { "Unique solution" } else { "Multiple solutions allowed" };
-        let hints_str = if self.hints_allowed { 
-            format!("{} hints available", self.max_hints) 
-        } else { 
-            "No hints".to_string() 
+
+        let unique_str = if self.require_unique_solution {
+            "Unique solution"
+        } else {
+            "Multiple solutions allowed"
         };
-        
-        format!("{} • {} • {} clues • {}", 
-                difficulty_str, unique_str, 
-                format!("{}-{}", self.givens_range.0, self.givens_range.1),
-                hints_str)
+        let hints_str = if self.hints_allowed {
+            format!("{} hints available", self.max_hints)
+        } else {
+            "No hints".to_string()
+        };
+
+        format!(
+            "{} • {} • {}-{} clues • {}",
+            difficulty_str,
+            unique_str,
+            self.givens_range.0,
+            self.givens_range.1,
+            hints_str
+        )
     }
 }
 
@@ -147,7 +154,7 @@ impl PresetKind {
             PresetKind::NightProwler,
         ]
     }
-    
+
     /// Get the display name for this preset.
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -157,14 +164,20 @@ impl PresetKind {
             PresetKind::NightProwler => "😾 Night Prowler",
         }
     }
-    
+
     /// Get a short description of this preset.
     pub fn description(&self) -> &'static str {
         match self {
-            PresetKind::CozyKitten => "Perfect for beginners. Lots of clues, helpful hints, and forgiving rules.",
+            PresetKind::CozyKitten => {
+                "Perfect for beginners. Lots of clues, helpful hints, and forgiving rules."
+            }
             PresetKind::CuriousCat => "Ready to explore? Medium challenge with guided discovery.",
-            PresetKind::StreetwiseStray => "You know the streets. Fewer clues, limited hints, real challenge.",
-            PresetKind::NightProwler => "Expert level. Minimal clues, no hints. Only the sharpest claws survive.",
+            PresetKind::StreetwiseStray => {
+                "You know the streets. Fewer clues, limited hints, real challenge."
+            }
+            PresetKind::NightProwler => {
+                "Expert level. Minimal clues, no hints. Only the sharpest claws survive."
+            }
         }
     }
 }
@@ -251,7 +264,7 @@ pub struct Move {
 #[derive(Debug, Clone, Resource)]
 pub struct GameHistory {
     pub moves: VecDeque<Move>,
-    pub undo_index: usize, // Index pointing to the "current" state
+    pub undo_index: usize,  // Index pointing to the "current" state
     pub max_history: usize, // Maximum number of moves to remember
 }
 
@@ -385,38 +398,29 @@ impl Default for Solution {
 }
 
 /// Debug mode configuration for testing and development.
-#[derive(Debug, Clone, Resource)]
+#[derive(Debug, Clone, Resource, Default)]
 pub struct DebugMode {
     pub enabled: bool,
     pub unlimited_hints: bool,
-}
-
-impl Default for DebugMode {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            unlimited_hints: false,
-        }
-    }
 }
 
 impl DebugMode {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Enable debug mode with unlimited hints.
     pub fn enable_unlimited_hints(&mut self) {
         self.enabled = true;
         self.unlimited_hints = true;
     }
-    
+
     /// Disable debug mode and return to normal gameplay.
     pub fn disable(&mut self) {
         self.enabled = false;
         self.unlimited_hints = false;
     }
-    
+
     /// Toggle debug mode with unlimited hints.
     pub fn toggle_unlimited_hints(&mut self) {
         if self.enabled && self.unlimited_hints {
@@ -465,7 +469,7 @@ impl HintSystem {
     pub fn can_use_hint(&self, debug_mode: &DebugMode) -> bool {
         debug_mode.unlimited_hints || self.hints_remaining > 0
     }
-    
+
     /// Get display text for hint button, showing debug status if applicable.
     pub fn get_hint_button_text(&self, debug_mode: &DebugMode) -> String {
         if debug_mode.unlimited_hints {
@@ -489,18 +493,22 @@ impl Default for HintSystem {
 pub fn validate_unique_solution(board: &BoardState) -> bool {
     let mut solution_count = 0;
     let mut test_board = board.clone();
-    
+
     solve_with_counter(&mut test_board, &mut solution_count, 2); // Stop after finding 2 solutions
     solution_count == 1
 }
 
 /// Backtracking solver with solution counting (for uniqueness validation).
 /// Stops early once max_solutions is reached for efficiency.
-fn solve_with_counter(board: &mut BoardState, solution_count: &mut usize, max_solutions: usize) -> bool {
+fn solve_with_counter(
+    board: &mut BoardState,
+    solution_count: &mut usize,
+    max_solutions: usize,
+) -> bool {
     if *solution_count >= max_solutions {
         return false; // Early exit - we've found enough solutions
     }
-    
+
     // Find the next empty cell
     for row in 0..GRID_SIZE {
         for col in 0..GRID_SIZE {
@@ -510,26 +518,26 @@ fn solve_with_counter(board: &mut BoardState, solution_count: &mut usize, max_so
                     if board.is_valid_placement(row, col, value) {
                         // Place the value
                         board.cells[row][col] = Some(value);
-                        
+
                         // Recursively solve
                         if solve_with_counter(board, solution_count, max_solutions) {
                             return true; // Found a solution path
                         }
-                        
+
                         // Backtrack
                         board.cells[row][col] = None;
                     }
                 }
-                
+
                 // No valid value found for this cell
                 return false;
             }
         }
     }
-    
+
     // All cells filled - found a complete solution!
     *solution_count += 1;
-    
+
     // Continue searching for more solutions (don't return true yet)
     false
 }
@@ -540,7 +548,7 @@ pub fn solve_unique(board: &BoardState) -> Option<Solution> {
     if !validate_unique_solution(board) {
         return None; // No unique solution
     }
-    
+
     // We know there's exactly one solution, so solve normally
     let mut test_board = board.clone();
     if solve_board(&mut test_board) {
@@ -561,23 +569,23 @@ fn solve_board(board: &mut BoardState) -> bool {
                     if board.is_valid_placement(row, col, value) {
                         // Place the value
                         board.cells[row][col] = Some(value);
-                        
+
                         // Recursively solve
                         if solve_board(board) {
                             return true;
                         }
-                        
+
                         // Backtrack
                         board.cells[row][col] = None;
                     }
                 }
-                
+
                 // No valid value found for this cell
                 return false;
             }
         }
     }
-    
+
     // All cells filled - puzzle solved!
     true
 }
@@ -587,7 +595,7 @@ fn solve_board(board: &mut BoardState) -> bool {
 pub fn get_next_hint(board: &BoardState, solution: &Solution) -> Option<(usize, usize, usize)> {
     // Find empty cells that could be filled
     let mut candidates = Vec::new();
-    
+
     for row in 0..GRID_SIZE {
         for col in 0..GRID_SIZE {
             // Only hint for empty cells that are not given cells
@@ -597,7 +605,7 @@ pub fn get_next_hint(board: &BoardState, solution: &Solution) -> Option<(usize, 
             }
         }
     }
-    
+
     // Return a random candidate (to make hints less predictable)
     if !candidates.is_empty() {
         let mut rng = thread_rng();
@@ -748,11 +756,10 @@ impl BoardState {
 
         for row in 0..GRID_SIZE {
             for col in 0..GRID_SIZE {
-                if let Some(value) = self.cells[row][col] {
-                    if !self.is_valid_placement(row, col, value) {
+                if let Some(value) = self.cells[row][col]
+                    && !self.is_valid_placement(row, col, value) {
                         conflicts.push((row, col));
                     }
-                }
             }
         }
 
@@ -792,7 +799,7 @@ impl BoardState {
     ///
     /// This uses an improved algorithm:
     /// 1. Fill the grid with a valid complete solution
-    /// 2. Store the solution 
+    /// 2. Store the solution
     /// 3. Use smart clue removal that maintains uniqueness
     /// 4. For Expert puzzles, use advanced uniqueness-preserving techniques
     ///
@@ -800,12 +807,16 @@ impl BoardState {
     ///
     /// * `settings` - Generation settings including difficulty, uniqueness, etc.
     pub fn generate_puzzle_with_settings(&mut self, settings: &PuzzleSettings) -> Option<Solution> {
-        let max_attempts = if settings.require_unique_solution { 15 } else { 3 };
-        
+        let max_attempts = if settings.require_unique_solution {
+            15
+        } else {
+            3
+        };
+
         for attempt in 0..max_attempts {
             // Start with a clear board
             self.clear();
-            
+
             // Set seed if specified
             if let Some(seed) = settings.seed {
                 // For reproducible generation, we'd need to seed the RNG here
@@ -822,70 +833,84 @@ impl BoardState {
             let solution = Solution::from_board(self)?;
 
             // Use improved clue removal based on difficulty
-            let success = if settings.difficulty == Difficulty::Expert && settings.require_unique_solution {
-                // Expert puzzles need advanced uniqueness-preserving generation
-                self.generate_expert_unique_puzzle(&settings, &solution)
-            } else {
-                // Use traditional method for easier difficulties
-                let target_givens = thread_rng().gen_range(settings.givens_range.0..=settings.givens_range.1);
-                self.remove_numbers_for_puzzle(target_givens);
-                
-                if settings.require_unique_solution {
-                    validate_unique_solution(self)
+            let success =
+                if settings.difficulty == Difficulty::Expert && settings.require_unique_solution {
+                    // Expert puzzles need advanced uniqueness-preserving generation
+                    self.generate_expert_unique_puzzle(settings, &solution)
                 } else {
-                    true
-                }
-            };
-            
+                    // Use traditional method for easier difficulties
+                    let target_givens =
+                        thread_rng().gen_range(settings.givens_range.0..=settings.givens_range.1);
+                    self.remove_numbers_for_puzzle(target_givens);
+
+                    if settings.require_unique_solution {
+                        validate_unique_solution(self)
+                    } else {
+                        true
+                    }
+                };
+
             if success {
                 let givens_count = self.cells.iter().flatten().filter(|c| c.is_some()).count();
-                println!("Generated unique puzzle with {} givens (attempt {})", givens_count, attempt + 1);
+                println!(
+                    "Generated unique puzzle with {} givens (attempt {})",
+                    givens_count,
+                    attempt + 1
+                );
                 return Some(solution);
             } else {
-                println!("Attempt {} failed uniqueness check, retrying...", attempt + 1);
+                println!(
+                    "Attempt {} failed uniqueness check, retrying...",
+                    attempt + 1
+                );
                 continue;
             }
         }
-        
+
         // Failed to generate after all attempts
         println!("Failed to generate puzzle after {} attempts", max_attempts);
         None
     }
-    
+
     /// Advanced Expert puzzle generation that maintains uniqueness.
     /// Uses iterative clue removal with uniqueness checking at each step.
-    fn generate_expert_unique_puzzle(&mut self, settings: &PuzzleSettings, _solution: &Solution) -> bool {
+    fn generate_expert_unique_puzzle(
+        &mut self,
+        settings: &PuzzleSettings,
+        _solution: &Solution,
+    ) -> bool {
         // Start with all clues (complete solution)
         let mut candidates_for_removal = Vec::new();
-        
+
         // Build list of all positions that could potentially be removed
         for row in 0..GRID_SIZE {
             for col in 0..GRID_SIZE {
                 candidates_for_removal.push((row, col));
             }
         }
-        
+
         // Shuffle to ensure variety in the final puzzle
         candidates_for_removal.shuffle(&mut thread_rng());
-        
-        let target_givens = thread_rng().gen_range(settings.givens_range.0..=settings.givens_range.1);
+
+        let target_givens =
+            thread_rng().gen_range(settings.givens_range.0..=settings.givens_range.1);
         let target_removals = GRID_SIZE * GRID_SIZE - target_givens;
-        
+
         let mut removals_made = 0;
-        
+
         // Iteratively remove clues while preserving uniqueness
         for (row, col) in candidates_for_removal {
             if removals_made >= target_removals {
                 break; // We've removed enough
             }
-            
+
             // Temporarily remove this clue
             let original_value = self.cells[row][col];
             let original_type = self.cell_types[row][col];
-            
+
             self.cells[row][col] = None;
             self.cell_types[row][col] = None;
-            
+
             // Check if puzzle still has unique solution
             if validate_unique_solution(self) {
                 // Good! This removal preserves uniqueness
@@ -896,7 +921,7 @@ impl BoardState {
                 self.cell_types[row][col] = original_type;
             }
         }
-        
+
         // Mark remaining cells as Given
         for row in 0..GRID_SIZE {
             for col in 0..GRID_SIZE {
@@ -905,13 +930,13 @@ impl BoardState {
                 }
             }
         }
-        
+
         let final_givens = self.cells.iter().flatten().filter(|c| c.is_some()).count();
-        
+
         // Check if we achieved a reasonable difficulty level
         final_givens >= settings.givens_range.0 && final_givens <= settings.givens_range.1
     }
-    
+
     /// Legacy method - generates an easy puzzle (for backward compatibility).
     pub fn generate_puzzle(&mut self, givens: usize) -> Solution {
         let settings = PuzzleSettings {
@@ -922,7 +947,7 @@ impl BoardState {
             hints_allowed: true,
             max_hints: 3,
         };
-        
+
         self.generate_puzzle_with_settings(&settings)
             .unwrap_or_else(|| {
                 // Fallback: create a simple solution if generation fails
@@ -999,7 +1024,6 @@ impl BoardState {
         }
     }
 
-
     /// Check if a cell is a given cell (part of the original puzzle).
     pub fn is_given_cell(&self, row: usize, col: usize) -> bool {
         matches!(self.cell_types[row][col], Some(CellType::Given))
@@ -1013,7 +1037,7 @@ impl BoardState {
         }
 
         self.cells[game_move.row][game_move.col] = game_move.new_value;
-        
+
         // Update cell type
         self.cell_types[game_move.row][game_move.col] = if game_move.new_value.is_some() {
             Some(CellType::Player)
@@ -1030,7 +1054,7 @@ impl BoardState {
         }
 
         self.cells[game_move.row][game_move.col] = game_move.old_value;
-        
+
         // Update cell type
         self.cell_types[game_move.row][game_move.col] = if game_move.old_value.is_some() {
             Some(CellType::Player)
@@ -1038,10 +1062,16 @@ impl BoardState {
             None
         };
     }
-    
+
     /// Create a save game from current board state
-    pub fn create_save_game(&self, solution: &Solution, settings: &PuzzleSettings, 
-                           elapsed_seconds: u64, move_count: usize, hints_remaining: usize) -> SaveGame {
+    pub fn create_save_game(
+        &self,
+        solution: &Solution,
+        settings: &PuzzleSettings,
+        elapsed_seconds: u64,
+        move_count: usize,
+        hints_remaining: usize,
+    ) -> SaveGame {
         SaveGame {
             board_cells: self.cells,
             cell_types: self.cell_types,
@@ -1056,7 +1086,7 @@ impl BoardState {
                 .as_secs(),
         }
     }
-    
+
     /// Restore board state from a save game
     pub fn restore_from_save(&mut self, save_game: &SaveGame) {
         self.cells = save_game.board_cells;
@@ -1128,53 +1158,55 @@ impl PersistentData {
     pub fn load() -> Self {
         let save_dir = get_save_directory();
         let save_file = save_dir.join("nine_lives_data.json");
-        
+
         if save_file.exists() {
             match std::fs::read_to_string(&save_file) {
-                Ok(contents) => {
-                    match serde_json::from_str::<PersistentData>(&contents) {
-                        Ok(data) => {
-                            println!("✅ Loaded persistent data from {:?}", save_file);
-                            return data;
-                        }
-                        Err(e) => {
-                            println!("⚠️ Failed to parse save file: {}", e);
-                        }
+                Ok(contents) => match serde_json::from_str::<PersistentData>(&contents) {
+                    Ok(data) => {
+                        println!("✅ Loaded persistent data from {:?}", save_file);
+                        return data;
                     }
-                }
+                    Err(e) => {
+                        println!("⚠️ Failed to parse save file: {}", e);
+                    }
+                },
                 Err(e) => {
                     println!("⚠️ Failed to read save file: {}", e);
                 }
             }
         }
-        
+
         println!("📁 Creating new persistent data (no save file found)");
         Self::default()
     }
-    
+
     /// Save persistent data to disk
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let save_dir = get_save_directory();
-        
+
         // Ensure save directory exists
         std::fs::create_dir_all(&save_dir)?;
-        
+
         let save_file = save_dir.join("nine_lives_data.json");
         let json_data = serde_json::to_string_pretty(self)?;
-        
+
         std::fs::write(&save_file, json_data)?;
         println!("💾 Saved persistent data to {:?}", save_file);
-        
+
         Ok(())
     }
-    
+
     /// Record a completed game in statistics
     pub fn record_game_completion(&mut self, difficulty: &str, play_time_seconds: u64) {
         self.statistics.games_completed += 1;
         self.statistics.total_play_time_seconds += play_time_seconds;
-        
-        *self.statistics.games_per_difficulty.entry(difficulty.to_string()).or_insert(0) += 1;
-        
+
+        *self
+            .statistics
+            .games_per_difficulty
+            .entry(difficulty.to_string())
+            .or_insert(0) += 1;
+
         // Track fastest completion
         match self.statistics.fastest_completion_seconds {
             None => self.statistics.fastest_completion_seconds = Some(play_time_seconds),
@@ -1202,80 +1234,102 @@ mod tests {
     use super::*;
 
     /// Test Expert puzzle generation reliability - now should consistently succeed!
-    #[test] 
+    #[test]
     fn test_expert_generation_reliability_fixed() {
         let settings = PuzzleSettings::from_preset(PresetKind::NightProwler);
-        
+
         println!("🔍 Expert Generation Diagnostics");
         println!("Settings: {}", settings.description());
         println!("Max attempts per puzzle: 10");
-        println!("Target givens range: {}-{}", settings.givens_range.0, settings.givens_range.1);
+        println!(
+            "Target givens range: {}-{}",
+            settings.givens_range.0, settings.givens_range.1
+        );
         println!("Uniqueness required: {}", settings.require_unique_solution);
-        
+
         let mut success_count = 0;
         const TRIALS: usize = 5;
-        
+
         for trial in 1..=TRIALS {
             let mut board = BoardState::new();
-            
+
             match board.generate_puzzle_with_settings(&settings) {
                 Some(_solution) => {
                     success_count += 1;
                     let givens_count = board.cells.iter().flatten().filter(|c| c.is_some()).count();
-                    println!("✅ Trial {}: Generated successfully with {} givens", trial, givens_count);
+                    println!(
+                        "✅ Trial {}: Generated successfully with {} givens",
+                        trial, givens_count
+                    );
                 }
                 None => {
                     println!("❌ Trial {}: Failed to generate Expert puzzle", trial);
                 }
             }
         }
-        
+
         let success_rate = (success_count as f32 / TRIALS as f32) * 100.0;
-        println!("\n📊 Results: {}/{} successful ({:.1}% success rate)", 
-                 success_count, TRIALS, success_rate);
-        
+        println!(
+            "\n📊 Results: {}/{} successful ({:.1}% success rate)",
+            success_count, TRIALS, success_rate
+        );
+
         // With our improved algorithm, we expect high reliability
-        assert!(success_rate >= 80.0, "Expert generation should be at least 80% reliable");
-        
+        assert!(
+            success_rate >= 80.0,
+            "Expert generation should be at least 80% reliable"
+        );
+
         if success_rate >= 95.0 {
-            println!("✅ Excellent! Expert generation is very reliable ({:.1}%)", success_rate);
+            println!(
+                "✅ Excellent! Expert generation is very reliable ({:.1}%)",
+                success_rate
+            );
         } else {
-            println!("⚠️ Expert generation is working but could be more reliable ({:.1}%)", success_rate);
+            println!(
+                "⚠️ Expert generation is working but could be more reliable ({:.1}%)",
+                success_rate
+            );
         }
     }
-    
+
     /// Test the uniqueness validation algorithm with known cases
     #[test]
     fn test_uniqueness_validation_algorithm() {
         // Test case 1: Empty board should have multiple solutions
         let empty_board = BoardState::new();
-        assert!(!validate_unique_solution(&empty_board), 
-               "Empty board should have multiple solutions");
-        
+        assert!(
+            !validate_unique_solution(&empty_board),
+            "Empty board should have multiple solutions"
+        );
+
         // Test case 2: Nearly complete board should have unique solution
         let mut nearly_complete = BoardState::new();
         // Fill most cells with a valid pattern, leaving just a few empty
         for row in 0..GRID_SIZE {
             for col in 0..GRID_SIZE {
-                if (row * GRID_SIZE + col) < 75 { // Fill 75/81 cells
+                if (row * GRID_SIZE + col) < 75 {
+                    // Fill 75/81 cells
                     nearly_complete.cells[row][col] = Some((row + col) % GRID_SIZE);
                 }
             }
         }
-        
+
         // Test case 3: Board with obvious multiple solutions
         let mut multi_solution = BoardState::new();
         // Place just a few clues that definitely allow multiple solutions
         multi_solution.cells[0][0] = Some(0);
         multi_solution.cells[1][1] = Some(1);
         multi_solution.cells[2][2] = Some(2);
-        
-        assert!(!validate_unique_solution(&multi_solution),
-               "Board with minimal clues should have multiple solutions");
-        
+
+        assert!(
+            !validate_unique_solution(&multi_solution),
+            "Board with minimal clues should have multiple solutions"
+        );
+
         println!("✅ Uniqueness validation algorithm appears to be working correctly");
     }
-    
+
     /// Test solution counter accuracy by manually checking a simple case
     #[test]
     fn test_solution_counter_accuracy() {
@@ -1284,66 +1338,85 @@ mod tests {
         sparse_board.cells[0][0] = Some(0);
         sparse_board.cells[1][1] = Some(1);
         sparse_board.cells[2][2] = Some(2);
-        
+
         let mut solution_count = 0;
         let mut test_copy = sparse_board.clone();
         solve_with_counter(&mut test_copy, &mut solution_count, 5); // Stop after finding 5 solutions
-        
+
         println!("Solution count for sparse board: {}", solution_count);
-        assert!(solution_count >= 1, "Sparse board should have at least 1 solution");
-        
+        assert!(
+            solution_count >= 1,
+            "Sparse board should have at least 1 solution"
+        );
+
         // Test case 2: Empty board should have many solutions
         let empty_board = BoardState::new();
         let mut empty_solution_count = 0;
         let mut empty_copy = empty_board.clone();
         solve_with_counter(&mut empty_copy, &mut empty_solution_count, 2); // Just check for multiple
-        
-        println!("Solution count for empty board (limited to 2): {}", empty_solution_count);
-        assert!(empty_solution_count >= 1, "Empty board should have solutions");
+
+        println!(
+            "Solution count for empty board (limited to 2): {}",
+            empty_solution_count
+        );
+        assert!(
+            empty_solution_count >= 1,
+            "Empty board should have solutions"
+        );
     }
-    
+
     /// Comprehensive stress test for the improved Expert generation algorithm
     #[test]
     #[ignore = "Stress test - takes a while to run"]
     fn test_expert_generation_stress_test() {
         use std::time::Instant;
-        
+
         let settings = PuzzleSettings::from_preset(PresetKind::NightProwler);
-        
+
         println!("💪 Expert Generation Stress Test");
         println!("Generating 100 Expert puzzles to validate reliability and performance...");
         println!("Settings: {}", settings.description());
-        
+
         let mut success_count = 0;
         let mut total_time = std::time::Duration::ZERO;
         let mut givens_histogram = std::collections::HashMap::new();
         const STRESS_TESTS: usize = 100;
-        
+
         for trial in 1..=STRESS_TESTS {
             let mut board = BoardState::new();
             let start_time = Instant::now();
-            
+
             match board.generate_puzzle_with_settings(&settings) {
                 Some(_solution) => {
                     success_count += 1;
                     let elapsed = start_time.elapsed();
                     total_time += elapsed;
-                    
+
                     let givens_count = board.cells.iter().flatten().filter(|c| c.is_some()).count();
                     *givens_histogram.entry(givens_count).or_insert(0) += 1;
-                    
+
                     // Validate puzzle properties
-                    assert!(givens_count >= 22 && givens_count <= 26, 
-                           "Expert puzzle should have 22-26 givens, got {}", givens_count);
-                    assert!(board.get_conflicts().is_empty(), 
-                           "Expert puzzle should have no conflicts");
-                    assert!(validate_unique_solution(&board), 
-                           "Expert puzzle should have unique solution");
-                    
+                    assert!(
+                        (22..=26).contains(&givens_count),
+                        "Expert puzzle should have 22-26 givens, got {}",
+                        givens_count
+                    );
+                    assert!(
+                        board.get_conflicts().is_empty(),
+                        "Expert puzzle should have no conflicts"
+                    );
+                    assert!(
+                        validate_unique_solution(&board),
+                        "Expert puzzle should have unique solution"
+                    );
+
                     if trial % 10 == 0 {
-                        println!("  ✅ Generated {}/{} puzzles, avg time: {:.1}ms", 
-                                trial, STRESS_TESTS, 
-                                (total_time.as_millis() as f32 / trial as f32));
+                        println!(
+                            "  ✅ Generated {}/{} puzzles, avg time: {:.1}ms",
+                            trial,
+                            STRESS_TESTS,
+                            (total_time.as_millis() as f32 / trial as f32)
+                        );
                     }
                 }
                 None => {
@@ -1351,68 +1424,107 @@ mod tests {
                 }
             }
         }
-        
+
         let success_rate = (success_count as f32 / STRESS_TESTS as f32) * 100.0;
         let avg_time_ms = total_time.as_millis() as f32 / success_count as f32;
-        
+
         println!("\n📊 Final Results:");
-        println!("  • Success Rate: {:.1}% ({}/{})", success_rate, success_count, STRESS_TESTS);
+        println!(
+            "  • Success Rate: {:.1}% ({}/{})",
+            success_rate, success_count, STRESS_TESTS
+        );
         println!("  • Average Generation Time: {:.1}ms", avg_time_ms);
         println!("  • Total Time: {:.2}s", total_time.as_secs_f32());
-        
+
         println!("\n📊 Givens Distribution:");
         for givens in 22..=26 {
             let count = givens_histogram.get(&givens).unwrap_or(&0);
             let percentage = (*count as f32 / success_count as f32) * 100.0;
-            println!("  • {} givens: {} puzzles ({:.1}%)", givens, count, percentage);
+            println!(
+                "  • {} givens: {} puzzles ({:.1}%)",
+                givens, count, percentage
+            );
         }
-        
+
         // Performance and reliability assertions
-        assert!(success_rate >= 95.0, "Expert generation should be at least 95% reliable");
-        assert!(avg_time_ms < 500.0, "Expert generation should average under 500ms in debug mode");
-        
+        assert!(
+            success_rate >= 95.0,
+            "Expert generation should be at least 95% reliable"
+        );
+        assert!(
+            avg_time_ms < 500.0,
+            "Expert generation should average under 500ms in debug mode"
+        );
+
         // Distribution should be reasonably spread across the range
         let min_givens = *givens_histogram.keys().min().unwrap_or(&26);
         let max_givens = *givens_histogram.keys().max().unwrap_or(&22);
-        assert!(max_givens - min_givens >= 2, "Should generate variety in givens count");
-        
+        assert!(
+            max_givens - min_givens >= 2,
+            "Should generate variety in givens count"
+        );
+
         println!("✅ Expert generation stress test passed!");
     }
-    
+
     /// Test that Expert puzzles are actually harder than Easy puzzles
     #[test]
     #[ignore = "Comparative difficulty test"]
     fn test_difficulty_progression() {
         let easy_settings = PuzzleSettings::from_preset(PresetKind::CozyKitten);
         let expert_settings = PuzzleSettings::from_preset(PresetKind::NightProwler);
-        
+
         let mut easy_board = BoardState::new();
         let mut expert_board = BoardState::new();
-        
+
         // Generate one of each
         let easy_solution = easy_board.generate_puzzle_with_settings(&easy_settings);
         let expert_solution = expert_board.generate_puzzle_with_settings(&expert_settings);
-        
-        assert!(easy_solution.is_some(), "Easy puzzle should generate successfully");
-        assert!(expert_solution.is_some(), "Expert puzzle should generate successfully");
-        
-        let easy_givens = easy_board.cells.iter().flatten().filter(|c| c.is_some()).count();
-        let expert_givens = expert_board.cells.iter().flatten().filter(|c| c.is_some()).count();
-        
+
+        assert!(
+            easy_solution.is_some(),
+            "Easy puzzle should generate successfully"
+        );
+        assert!(
+            expert_solution.is_some(),
+            "Expert puzzle should generate successfully"
+        );
+
+        let easy_givens = easy_board
+            .cells
+            .iter()
+            .flatten()
+            .filter(|c| c.is_some())
+            .count();
+        let expert_givens = expert_board
+            .cells
+            .iter()
+            .flatten()
+            .filter(|c| c.is_some())
+            .count();
+
         println!("Easy puzzle givens: {}", easy_givens);
         println!("Expert puzzle givens: {}", expert_givens);
-        
+
         // Expert should have significantly fewer givens (harder)
-        assert!(expert_givens < easy_givens, 
-               "Expert puzzles should have fewer givens than Easy puzzles");
-        
+        assert!(
+            expert_givens < easy_givens,
+            "Expert puzzles should have fewer givens than Easy puzzles"
+        );
+
         // Specific ranges should be respected
-        assert!(easy_givens >= 35 && easy_givens <= 40, "Easy givens should be 35-40");
-        assert!(expert_givens >= 22 && expert_givens <= 26, "Expert givens should be 22-26");
-        
+        assert!(
+            (35..=40).contains(&easy_givens),
+            "Easy givens should be 35-40"
+        );
+        assert!(
+            (22..=26).contains(&expert_givens),
+            "Expert givens should be 22-26"
+        );
+
         println!("✅ Difficulty progression is working correctly!");
     }
-    
+
     /// Test basic persistence functionality
     #[test]
     fn test_persistence_system() {
@@ -1422,26 +1534,34 @@ mod tests {
             volume: 0.8,
             auto_save_enabled: false,
         };
-        
+
         let json = serde_json::to_string(&settings).expect("Should serialize UserSettings");
         println!("UserSettings JSON: {}", json);
-        
-        let restored: UserSettings = serde_json::from_str(&json).expect("Should deserialize UserSettings");
+
+        let restored: UserSettings =
+            serde_json::from_str(&json).expect("Should deserialize UserSettings");
         assert_eq!(restored.last_preset, PresetKind::NightProwler);
         assert_eq!(restored.volume, 0.8);
-        assert_eq!(restored.auto_save_enabled, false);
-        
+        assert!(!restored.auto_save_enabled);
+
         // Test PersistentData creation and statistics
         let mut persistent_data = PersistentData::default();
         persistent_data.record_game_completion("Expert", 300);
         persistent_data.record_game_completion("Easy", 120);
-        
+
         assert_eq!(persistent_data.statistics.games_completed, 2);
-        assert_eq!(persistent_data.statistics.fastest_completion_seconds, Some(120));
-        
-        let expert_count = persistent_data.statistics.games_per_difficulty.get("Expert").unwrap_or(&0);
+        assert_eq!(
+            persistent_data.statistics.fastest_completion_seconds,
+            Some(120)
+        );
+
+        let expert_count = persistent_data
+            .statistics
+            .games_per_difficulty
+            .get("Expert")
+            .unwrap_or(&0);
         assert_eq!(*expert_count, 1);
-        
+
         println!("✅ Persistence system basic functionality works!");
     }
 
@@ -1662,7 +1782,7 @@ mod tests {
     fn test_generate_puzzle_with_settings() {
         let mut board = BoardState::new();
         let settings = PuzzleSettings::from_preset(PresetKind::CozyKitten);
-        
+
         if let Some(_solution) = board.generate_puzzle_with_settings(&settings) {
             // Count the number of given (non-empty) cells
             let given_count = board
@@ -1674,7 +1794,7 @@ mod tests {
 
             // Cozy Kitten should have 35-40 givens
             assert!(
-                given_count >= 35 && given_count <= 40,
+                (35..=40).contains(&given_count),
                 "Cozy Kitten puzzle should have 35-40 givens, got {}",
                 given_count
             );
@@ -1700,29 +1820,74 @@ mod tests {
         let hard_settings = PuzzleSettings::from_preset(PresetKind::StreetwiseStray);
 
         // Generate puzzles - these may fail sometimes due to uniqueness requirements
-        let easy_success = easy_board.generate_puzzle_with_settings(&easy_settings).is_some();
-        let medium_success = medium_board.generate_puzzle_with_settings(&medium_settings).is_some();
-        let hard_success = hard_board.generate_puzzle_with_settings(&hard_settings).is_some();
-        
+        let easy_success = easy_board
+            .generate_puzzle_with_settings(&easy_settings)
+            .is_some();
+        let medium_success = medium_board
+            .generate_puzzle_with_settings(&medium_settings)
+            .is_some();
+        let hard_success = hard_board
+            .generate_puzzle_with_settings(&hard_settings)
+            .is_some();
+
         // At least one should succeed (they might not all succeed due to uniqueness constraints)
-        assert!(easy_success || medium_success || hard_success, "At least one difficulty should generate successfully");
+        assert!(
+            easy_success || medium_success || hard_success,
+            "At least one difficulty should generate successfully"
+        );
 
         if easy_success {
-            let easy_givens = easy_board.cells.iter().flatten().filter(|c| c.is_some()).count();
-            assert!(easy_givens >= 35 && easy_givens <= 40, "Easy puzzle givens: {}", easy_givens);
-            assert!(easy_board.get_conflicts().is_empty(), "Easy puzzle should have no conflicts");
+            let easy_givens = easy_board
+                .cells
+                .iter()
+                .flatten()
+                .filter(|c| c.is_some())
+                .count();
+            assert!(
+                (35..=40).contains(&easy_givens),
+                "Easy puzzle givens: {}",
+                easy_givens
+            );
+            assert!(
+                easy_board.get_conflicts().is_empty(),
+                "Easy puzzle should have no conflicts"
+            );
         }
-        
+
         if medium_success {
-            let medium_givens = medium_board.cells.iter().flatten().filter(|c| c.is_some()).count();
-            assert!(medium_givens >= 30 && medium_givens <= 35, "Medium puzzle givens: {}", medium_givens);
-            assert!(medium_board.get_conflicts().is_empty(), "Medium puzzle should have no conflicts");
+            let medium_givens = medium_board
+                .cells
+                .iter()
+                .flatten()
+                .filter(|c| c.is_some())
+                .count();
+            assert!(
+                (30..=35).contains(&medium_givens),
+                "Medium puzzle givens: {}",
+                medium_givens
+            );
+            assert!(
+                medium_board.get_conflicts().is_empty(),
+                "Medium puzzle should have no conflicts"
+            );
         }
-        
+
         if hard_success {
-            let hard_givens = hard_board.cells.iter().flatten().filter(|c| c.is_some()).count();
-            assert!(hard_givens >= 26 && hard_givens <= 30, "Hard puzzle givens: {}", hard_givens);
-            assert!(hard_board.get_conflicts().is_empty(), "Hard puzzle should have no conflicts");
+            let hard_givens = hard_board
+                .cells
+                .iter()
+                .flatten()
+                .filter(|c| c.is_some())
+                .count();
+            assert!(
+                (26..=30).contains(&hard_givens),
+                "Hard puzzle givens: {}",
+                hard_givens
+            );
+            assert!(
+                hard_board.get_conflicts().is_empty(),
+                "Hard puzzle should have no conflicts"
+            );
         }
     }
 
@@ -1730,16 +1895,19 @@ mod tests {
     fn test_puzzle_generation_is_random() {
         let mut board1 = BoardState::new();
         let mut board2 = BoardState::new();
-        
+
         let settings = PuzzleSettings::from_preset(PresetKind::CozyKitten);
-        
+
         // Generate two puzzles
         let success1 = board1.generate_puzzle_with_settings(&settings).is_some();
         let success2 = board2.generate_puzzle_with_settings(&settings).is_some();
-        
+
         // Both should succeed or at least one should succeed
-        assert!(success1 || success2, "At least one puzzle generation should succeed");
-        
+        assert!(
+            success1 || success2,
+            "At least one puzzle generation should succeed"
+        );
+
         // If both succeeded, they should likely be different (though not guaranteed)
         if success1 && success2 {
             let boards_identical = board1.cells == board2.cells;
@@ -1758,19 +1926,19 @@ mod tests {
         assert_eq!(cozy_settings.givens_range, (35, 40));
         assert!(cozy_settings.hints_allowed);
         assert_eq!(cozy_settings.max_hints, 5);
-        
+
         // Test Curious Cat preset
         let curious_settings = PuzzleSettings::from_preset(PresetKind::CuriousCat);
         assert_eq!(curious_settings.difficulty, Difficulty::Medium);
         assert_eq!(curious_settings.givens_range, (30, 35));
         assert_eq!(curious_settings.max_hints, 3);
-        
+
         // Test Streetwise Stray preset
         let stray_settings = PuzzleSettings::from_preset(PresetKind::StreetwiseStray);
         assert_eq!(stray_settings.difficulty, Difficulty::Hard);
         assert_eq!(stray_settings.givens_range, (26, 30));
         assert_eq!(stray_settings.max_hints, 2);
-        
+
         // Test Night Prowler preset
         let prowler_settings = PuzzleSettings::from_preset(PresetKind::NightProwler);
         assert_eq!(prowler_settings.difficulty, Difficulty::Expert);
@@ -1783,16 +1951,16 @@ mod tests {
     fn test_puzzle_settings_description() {
         let cozy_settings = PuzzleSettings::from_preset(PresetKind::CozyKitten);
         let description = cozy_settings.description();
-        
+
         // Should contain key information
         assert!(description.contains("Easy"));
         assert!(description.contains("Unique solution"));
         assert!(description.contains("35-40 clues"));
         assert!(description.contains("5 hints available"));
-        
+
         let prowler_settings = PuzzleSettings::from_preset(PresetKind::NightProwler);
         let prowler_description = prowler_settings.description();
-        
+
         assert!(prowler_description.contains("Expert"));
         assert!(prowler_description.contains("22-26 clues"));
         assert!(prowler_description.contains("No hints"));
@@ -1802,18 +1970,23 @@ mod tests {
     fn test_preset_kind_all_and_descriptions() {
         let all_presets = PresetKind::all();
         assert_eq!(all_presets.len(), 4);
-        
+
         for preset in all_presets {
             // Each preset should have a display name and description
             let display_name = preset.display_name();
             let description = preset.description();
-            
+
             assert!(!display_name.is_empty());
             assert!(!description.is_empty());
-            
+
             // Display names should contain emojis
-            assert!(display_name.contains("🐱") || display_name.contains("😸") || display_name.contains("😼") || display_name.contains("😾"));
-            
+            assert!(
+                display_name.contains("🐱")
+                    || display_name.contains("😸")
+                    || display_name.contains("😼")
+                    || display_name.contains("😾")
+            );
+
             // Descriptions should be reasonably long
             assert!(description.len() > 30);
         }
@@ -1823,7 +1996,7 @@ mod tests {
     fn test_default_puzzle_settings() {
         let default_settings = PuzzleSettings::default();
         let cozy_settings = PuzzleSettings::from_preset(PresetKind::CozyKitten);
-        
+
         // Default should be the same as Cozy Kitten
         assert_eq!(default_settings.difficulty, cozy_settings.difficulty);
         assert_eq!(default_settings.givens_range, cozy_settings.givens_range);

@@ -7,10 +7,15 @@
 /// - Game state transitions
 /// - Application orchestration
 /// - Connecting model and view layers
-
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint, PuzzleSettings};
-use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton, UndoButton, RedoButton, HintButton};
+use bevy::app::PluginGroupBuilder;
+use nine_lives_core::{
+    BoardState, DebugMode, GameHistory, GameSession, GameState, HintSystem, PuzzleSettings,
+    Solution, get_next_hint,
+};
+use nine_lives_ui::{
+    AppState, CatEmojis, Cell, ClearButton, HintButton, NewGameButton, RedoButton, UndoButton,
+};
 
 // --- Controller Systems ---
 
@@ -57,7 +62,7 @@ pub fn new_game_button_system(
     for interaction in &mut interaction_query {
         if *interaction == Interaction::Pressed {
             println!("🔄 New Game button pressed - returning to customization screen");
-            
+
             // Transition back to customization screen
             app_state.set(AppState::Customization);
         }
@@ -71,15 +76,14 @@ pub fn undo_button_system(
     mut history: ResMut<GameHistory>,
 ) {
     for interaction in &mut interaction_query {
-        if *interaction == Interaction::Pressed {
-            if let Some(game_move) = history.peek_undo().cloned() {
+        if *interaction == Interaction::Pressed
+            && let Some(game_move) = history.peek_undo().cloned() {
                 // Apply the reverse of the move
                 board.undo_move(&game_move);
                 // Mark as undone in history
                 history.mark_undone();
                 println!("Undid move at ({}, {})", game_move.row, game_move.col);
             }
-        }
     }
 }
 
@@ -90,15 +94,14 @@ pub fn redo_button_system(
     mut history: ResMut<GameHistory>,
 ) {
     for interaction in &mut interaction_query {
-        if *interaction == Interaction::Pressed {
-            if let Some(game_move) = history.peek_redo().cloned() {
+        if *interaction == Interaction::Pressed
+            && let Some(game_move) = history.peek_redo().cloned() {
                 // Reapply the move
                 board.apply_move(&game_move);
                 // Mark as redone in history
                 history.mark_redone();
                 println!("Redid move at ({}, {})", game_move.row, game_move.col);
             }
-        }
     }
 }
 
@@ -117,7 +120,7 @@ pub fn hint_button_system(
                     // Apply the hint directly to the board
                     board.cells[row][col] = Some(correct_value);
                     board.cell_types[row][col] = Some(nine_lives_core::CellType::Player);
-                    
+
                     if debug_mode.unlimited_hints {
                         println!(
                             "DEBUG HINT: Placed cat #{} at ({}, {}). [Unlimited hints enabled]",
@@ -145,20 +148,17 @@ pub fn hint_button_system(
 }
 
 /// System to handle debug mode toggle (Cmd+D or Ctrl+D).
-pub fn debug_mode_system(
-    input: Res<ButtonInput<KeyCode>>,
-    mut debug_mode: ResMut<DebugMode>,
-) {
+pub fn debug_mode_system(input: Res<ButtonInput<KeyCode>>, mut debug_mode: ResMut<DebugMode>) {
     let cmd_pressed = input.pressed(KeyCode::SuperLeft) || input.pressed(KeyCode::SuperRight);
     let ctrl_pressed = input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::ControlRight);
-    
+
     // Use Cmd on Mac, Ctrl on other platforms
     let modifier_pressed = if cfg!(target_os = "macos") {
         cmd_pressed
     } else {
         ctrl_pressed
     };
-    
+
     if modifier_pressed && input.just_pressed(KeyCode::KeyD) {
         debug_mode.toggle_unlimited_hints();
         if debug_mode.unlimited_hints {
@@ -185,40 +185,48 @@ pub fn keyboard_shortcuts_system(
     let cmd_pressed = input.pressed(KeyCode::SuperLeft) || input.pressed(KeyCode::SuperRight);
     let ctrl_pressed = input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::ControlRight);
     let shift_pressed = input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight);
-    
+
     // Use Cmd on Mac, Ctrl on other platforms
     let modifier_pressed = if cfg!(target_os = "macos") {
         cmd_pressed
     } else {
         ctrl_pressed
     };
-    
+
     if modifier_pressed && input.just_pressed(KeyCode::KeyZ) {
         if shift_pressed {
             // Redo (Cmd+Shift+Z or Ctrl+Shift+Z)
             if let Some(game_move) = history.peek_redo().cloned() {
                 board.apply_move(&game_move);
                 history.mark_redone();
-                println!("Keyboard: Redid move at ({}, {})", game_move.row, game_move.col);
+                println!(
+                    "Keyboard: Redid move at ({}, {})",
+                    game_move.row, game_move.col
+                );
             }
         } else {
             // Undo (Cmd+Z or Ctrl+Z)
             if let Some(game_move) = history.peek_undo().cloned() {
                 board.undo_move(&game_move);
                 history.mark_undone();
-                println!("Keyboard: Undid move at ({}, {})", game_move.row, game_move.col);
+                println!(
+                    "Keyboard: Undid move at ({}, {})",
+                    game_move.row, game_move.col
+                );
             }
         }
     }
-    
+
     // Alternative Redo shortcut: Cmd+Y or Ctrl+Y
-    if modifier_pressed && input.just_pressed(KeyCode::KeyY) {
-        if let Some(game_move) = history.peek_redo().cloned() {
+    if modifier_pressed && input.just_pressed(KeyCode::KeyY)
+        && let Some(game_move) = history.peek_redo().cloned() {
             board.apply_move(&game_move);
             history.mark_redone();
-            println!("Keyboard: Redid move at ({}, {})", game_move.row, game_move.col);
+            println!(
+                "Keyboard: Redid move at ({}, {})",
+                game_move.row, game_move.col
+            );
         }
-    }
 }
 
 /// Keeps GameState in sync with BoardState when it changes.
@@ -242,15 +250,42 @@ pub fn add_controller(app: &mut App) {
     );
 }
 
+/// Configure DefaultPlugins with platform-specific settings
+fn configure_default_plugins() -> PluginGroupBuilder {
+    #[cfg(target_arch = "wasm32")]
+    {
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Nine Lives: Cat Sudoku".to_string(),
+                resolution: (700., 800.).into(),
+                canvas: Some("#bevy".to_owned()),
+                ..default()
+            }),
+            ..default()
+        })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Nine Lives: Cat Sudoku".to_string(),
+                resolution: (700., 800.).into(),
+                ..default()
+            }),
+            ..default()
+        })
+    }
+}
+
 /// Initialize WASM-specific features
 #[cfg(target_arch = "wasm32")]
 fn init_wasm() {
     use wasm_bindgen::prelude::*;
-    
+
     // Set up panic hook for better error reporting
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
-    
+
     // Enable console logging
     #[cfg(feature = "web-sys")]
     {
@@ -270,33 +305,10 @@ pub fn run_game() {
     #[cfg(target_arch = "wasm32")]
     init_wasm();
     let mut app = App::new();
-    
-    // Configure plugins for web or desktop
-    #[cfg(target_arch = "wasm32")]
-    {
-        app.add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Nine Lives: Cat Sudoku".to_string(),
-                resolution: (700., 800.).into(),
-                canvas: Some("#bevy".to_owned()),
-                ..default()
-            }),
-            ..default()
-        }));
-    }
-    
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        app.add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Nine Lives: Cat Sudoku".to_string(),
-                resolution: (700., 800.).into(),
-                ..default()
-            }),
-            ..default()
-        }));
-    }
-    
+
+    // Configure plugins with platform-specific settings
+    app.add_plugins(configure_default_plugins());
+
     app
         // Initialize the core game state from the model layer
         .init_resource::<BoardState>()
@@ -337,8 +349,7 @@ mod tests {
         // Test that controller systems can be added to an app without panicking
         let mut app = App::new();
         add_controller(&mut app);
-        // If we get here, the systems were added successfully
-        assert!(true);
+        // If we get here without panicking, the systems were added successfully
     }
 
     #[test]

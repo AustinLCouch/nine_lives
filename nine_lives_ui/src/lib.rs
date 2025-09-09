@@ -26,7 +26,10 @@
 //! updated, fixing the highlighting sync issue.
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession, HintSystem, DebugMode, PresetKind, PuzzleSettings, Solution, GameHistory};
+use nine_lives_core::{
+    BoardState, DebugMode, GRID_SIZE, GameHistory, GameSession, GameState, HintSystem, PresetKind,
+    PuzzleSettings, Solution,
+};
 use std::collections::HashSet;
 
 // --- UI Components ---
@@ -293,8 +296,8 @@ pub fn update_cell_text(
 ) {
     for (cell, children) in &cell_query {
         // Get the first child of the cell, which should be the Text entity.
-        if let Some(text_entity) = children.iter().next() {
-            if let Ok((mut text, mut color)) = text_query.get_mut(text_entity) {
+        if let Some(text_entity) = children.iter().next()
+            && let Ok((mut text, mut color)) = text_query.get_mut(text_entity) {
                 let new_text_value = match board.cells[cell.row][cell.col] {
                     Some(idx) => cat_emojis.emojis[idx].clone(),
                     None => " ".to_string(), // Empty cells are just blank.
@@ -314,7 +317,6 @@ pub fn update_cell_text(
                     color.0 = Color::srgb(0.1, 0.3, 0.8);
                 }
             }
-        }
     }
 }
 
@@ -362,6 +364,7 @@ pub fn update_cell_colors(
 }
 
 /// System to add hover effects to buttons for better user feedback.
+#[allow(clippy::type_complexity)] // Query types are complex by nature in Bevy
 pub fn update_button_colors(
     mut new_game_query: Query<
         (&Interaction, &mut BackgroundColor),
@@ -534,6 +537,7 @@ pub fn tick_timer_display(
 }
 
 /// System to add advanced hover effects with row/column/box highlighting.
+#[allow(clippy::type_complexity)] // Query types are complex by nature in Bevy
 pub fn update_cell_hover_effects(
     board: Res<BoardState>,
     theme: Res<Theme>,
@@ -545,12 +549,12 @@ pub fn update_cell_hover_effects(
 ) {
     // Find the currently hovered cell
     let mut hovered_cell: Option<(usize, usize)> = None;
-    
+
     for (cell, interaction, mut border_color, mut bg_color) in &mut cell_query {
         match interaction {
             Interaction::Hovered => {
                 hovered_cell = Some((cell.row, cell.col));
-                
+
                 // Enhanced border for hovered cell
                 if !board.is_given_cell(cell.row, cell.col) {
                     border_color.0 = theme.cell_highlight_color; // Theme-based hover color
@@ -581,17 +585,18 @@ pub fn update_cell_hover_effects(
             }
         }
     }
-    
+
     // Apply subtle highlighting to related cells (same row, column, or box)
     if let Some((hovered_row, hovered_col)) = hovered_cell {
         let hovered_box_row = hovered_row / 3;
         let hovered_box_col = hovered_col / 3;
-        
+
         for (cell, mut bg_color) in &mut all_cells_query {
             let is_same_row = cell.row == hovered_row;
             let is_same_col = cell.col == hovered_col;
-            let is_same_box = (cell.row / 3 == hovered_box_row) && (cell.col / 3 == hovered_box_col);
-            
+            let is_same_box =
+                (cell.row / 3 == hovered_box_row) && (cell.col / 3 == hovered_box_col);
+
             if is_same_row || is_same_col || is_same_box {
                 // Subtle highlight for related cells
                 let base_color = get_cell_background_color(cell.row, cell.col, &theme);
@@ -623,7 +628,7 @@ pub fn sync_preset_button_highlights(
 ) {
     if selected_preset.is_changed() {
         let presets = PresetKind::all();
-        
+
         for (preset_button, mut bg_color, mut border_color) in &mut preset_buttons {
             if let Some(preset) = presets.get(preset_button.preset_id) {
                 if *preset == selected_preset.preset {
@@ -676,7 +681,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                     ..default()
                 },
             ));
-            
+
             // Subtitle
             parent.spawn((
                 Text::new("Choose your purrfect puzzle difficulty"),
@@ -690,20 +695,18 @@ pub fn setup_customization_screen(mut commands: Commands) {
                     ..default()
                 },
             ));
-            
+
             // Preset selection grid
             parent
-                .spawn((
-                    Node {
-                        display: Display::Grid,
-                        grid_template_columns: RepeatedGridTrack::flex(2, 1.0),
-                        grid_template_rows: RepeatedGridTrack::flex(2, 1.0),
-                        column_gap: Val::Px(20.0),
-                        row_gap: Val::Px(20.0),
-                        margin: UiRect::bottom(Val::Px(30.0)),
-                        ..default()
-                    },
-                ))
+                .spawn((Node {
+                    display: Display::Grid,
+                    grid_template_columns: RepeatedGridTrack::flex(2, 1.0),
+                    grid_template_rows: RepeatedGridTrack::flex(2, 1.0),
+                    column_gap: Val::Px(20.0),
+                    row_gap: Val::Px(20.0),
+                    margin: UiRect::bottom(Val::Px(30.0)),
+                    ..default()
+                },))
                 .with_children(|grid_parent| {
                     // Create preset buttons
                     for (index, preset) in PresetKind::all().iter().enumerate() {
@@ -738,7 +741,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                                         ..default()
                                     },
                                 ));
-                                
+
                                 // Preset description
                                 button_parent.spawn((
                                     Text::new(preset.description()),
@@ -747,17 +750,17 @@ pub fn setup_customization_screen(mut commands: Commands) {
                                         ..default()
                                     },
                                     TextColor(Color::srgb(0.8, 0.8, 0.9)),
-                                    Node {
-                                        ..default()
-                                    },
+                                    Node { ..default() },
                                 ));
                             });
                     }
                 });
-            
+
             // Settings summary display
             parent.spawn((
-                Text::new("Perfect for beginners. Lots of clues, helpful hints, and forgiving rules."),
+                Text::new(
+                    "Perfect for beginners. Lots of clues, helpful hints, and forgiving rules.",
+                ),
                 TextFont {
                     font_size: 14.0,
                     ..default()
@@ -770,7 +773,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                 },
                 SettingsSummary,
             ));
-            
+
             // Start Game button
             parent
                 .spawn((
@@ -798,7 +801,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                     ));
                 });
         });
-    
+
     println!("Nine Lives Cat Sudoku customization screen initialized!");
 }
 
@@ -814,10 +817,7 @@ pub fn cleanup_customization_screen(
 }
 
 /// System to clean up the game screen when exiting that state.
-pub fn cleanup_game_screen(
-    mut commands: Commands,
-    query: Query<Entity, With<GameScreenRoot>>,
-) {
+pub fn cleanup_game_screen(mut commands: Commands, query: Query<Entity, With<GameScreenRoot>>) {
     for entity in &query {
         commands.entity(entity).despawn();
     }
@@ -828,7 +828,15 @@ pub fn cleanup_game_screen(
 /// This system only handles interaction states and updates the SelectedPreset resource.
 /// Visual highlighting is handled separately by sync_preset_button_highlights.
 pub fn handle_preset_selection(
-    mut interaction_query: Query<(&Interaction, &PresetButton, &mut BackgroundColor, &mut BorderColor), Changed<Interaction>>,
+    mut interaction_query: Query<
+        (
+            &Interaction,
+            &PresetButton,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        Changed<Interaction>,
+    >,
     mut selected_preset: ResMut<SelectedPreset>,
 ) {
     for (interaction, preset_button, mut bg_color, mut border_color) in &mut interaction_query {
@@ -840,7 +848,7 @@ pub fn handle_preset_selection(
                     selected_preset.preset = *new_preset;
                     println!("Selected preset: {:?}", new_preset);
                 }
-                
+
                 // Visual feedback - pressed state only
                 *bg_color = BackgroundColor(PRESET_PRESSED_BG);
                 *border_color = BorderColor(PRESET_PRESSED_BORDER);
@@ -848,12 +856,11 @@ pub fn handle_preset_selection(
             Interaction::Hovered => {
                 // Only apply hover if this button is not currently selected
                 let presets = PresetKind::all();
-                if let Some(preset) = presets.get(preset_button.preset_id) {
-                    if *preset != selected_preset.preset {
+                if let Some(preset) = presets.get(preset_button.preset_id)
+                    && *preset != selected_preset.preset {
                         *bg_color = BackgroundColor(PRESET_HOVER_BG);
                         *border_color = BorderColor(PRESET_HOVER_BORDER);
                     }
-                }
             }
             Interaction::None => {
                 // Don't set colors here - sync_preset_button_highlights handles this
@@ -871,7 +878,7 @@ pub fn update_settings_summary(
     if selected_preset.is_changed() {
         let settings = PuzzleSettings::from_preset(selected_preset.preset);
         let summary_text = settings.description();
-        
+
         for mut text in &mut summary_query {
             text.0 = summary_text.clone();
         }
@@ -879,6 +886,7 @@ pub fn update_settings_summary(
 }
 
 /// System to handle Start Game button hover effects.
+#[allow(clippy::type_complexity)] // Query types are complex by nature in Bevy
 pub fn update_start_button_colors(
     mut button_query: Query<
         (&Interaction, &mut BackgroundColor),
@@ -896,7 +904,6 @@ pub fn update_start_button_colors(
 
 /// System that creates the visual 9x9 sudoku grid with clickable cells
 pub fn setup_grid(mut commands: Commands) {
-
     // Create the main UI root node
     commands
         .spawn((
@@ -927,17 +934,15 @@ pub fn setup_grid(mut commands: Commands) {
 
             // Game info panel (timer and move counter)
             parent
-                .spawn((
-                    Node {
-                        display: Display::Flex,
-                        flex_direction: FlexDirection::Row,
-                        column_gap: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(15.0)),
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    },
-                ))
+                .spawn((Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(40.0),
+                    margin: UiRect::bottom(Val::Px(15.0)),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },))
                 .with_children(|info_parent| {
                     // Timer display
                     info_parent.spawn((
@@ -974,7 +979,7 @@ pub fn setup_grid(mut commands: Commands) {
                     margin: UiRect::bottom(Val::Px(10.0)),
                     ..default()
                 },
-                    DebugStatusDisplay,
+                DebugStatusDisplay,
             ));
 
             // Game grid container
@@ -1223,6 +1228,7 @@ pub fn transition_to_customization(
 
 /// A system that transitions from `Customization` to `Ready` when "Start Game" is pressed.
 /// This system also generates the initial puzzle using the selected settings.
+#[allow(clippy::too_many_arguments)] // Bevy systems often need many parameters
 pub fn transition_to_game(
     mut app_state: ResMut<NextState<AppState>>,
     mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
@@ -1237,33 +1243,39 @@ pub fn transition_to_game(
     for interaction in &mut interaction_query {
         if *interaction == Interaction::Pressed {
             println!("🎯 Start Game button pressed!");
-            
+
             // Store the selected settings as a resource for the game to use
             let settings = PuzzleSettings::from_preset(selected_preset.preset);
             println!("📋 Generated settings: {}", settings.description());
             commands.insert_resource(settings.clone());
-            
+
             // Generate a new puzzle using the selected settings
             if let Some(new_solution) = board.generate_puzzle_with_settings(&settings) {
                 *solution = new_solution;
-                println!("Generated new puzzle with settings: {}", settings.description());
+                println!(
+                    "Generated new puzzle with settings: {}",
+                    settings.description()
+                );
             } else {
                 // Fallback: generate a simple puzzle if the advanced generation fails
                 *solution = board.generate_puzzle(35); // Default easy puzzle
                 println!("Fallback: Generated simple puzzle (advanced generation failed)");
             }
-            
+
             // Reset the session timer and move counter
             session.reset();
             // Clear move history
             history.clear();
             // Reset hints based on settings
             hint_system.reset(settings.max_hints);
-            
+
             // Transition to the game screen
             println!("🔄 Transitioning to Ready state...");
             app_state.set(AppState::Ready);
-            println!("✅ State transition triggered for preset: {:?}", selected_preset.preset);
+            println!(
+                "✅ State transition triggered for preset: {:?}",
+                selected_preset.preset
+            );
         }
     }
 }
@@ -1276,15 +1288,21 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>()
             // Startup: Initialize resources
-            .add_systems(Startup, (
-                setup_camera,
-                setup_theme, 
-                setup_cat_emojis, 
-                setup_selected_preset
-            ))
+            .add_systems(
+                Startup,
+                (
+                    setup_camera,
+                    setup_theme,
+                    setup_cat_emojis,
+                    setup_selected_preset,
+                ),
+            )
             // State transitions
             .add_systems(OnEnter(AppState::Customization), setup_customization_screen)
-            .add_systems(OnExit(AppState::Customization), cleanup_customization_screen)
+            .add_systems(
+                OnExit(AppState::Customization),
+                cleanup_customization_screen,
+            )
             .add_systems(OnEnter(AppState::Ready), setup_grid)
             .add_systems(OnExit(AppState::Ready), cleanup_game_screen)
             // Update systems
@@ -1293,7 +1311,6 @@ impl Plugin for UiPlugin {
                 (
                     // Loading state systems
                     transition_to_customization.run_if(in_state(AppState::Loading)),
-                    
                     // Customization state systems
                     handle_preset_selection.run_if(in_state(AppState::Customization)),
                     sync_preset_button_highlights
@@ -1302,7 +1319,6 @@ impl Plugin for UiPlugin {
                     update_settings_summary.run_if(in_state(AppState::Customization)),
                     update_start_button_colors.run_if(in_state(AppState::Customization)),
                     transition_to_game.run_if(in_state(AppState::Customization)),
-                    
                     // Game state systems
                     update_cell_text
                         .run_if(resource_changed::<BoardState>)
@@ -1321,7 +1337,9 @@ impl Plugin for UiPlugin {
                         .run_if(resource_changed::<GameSession>)
                         .run_if(in_state(AppState::Ready)),
                     update_hint_button_text
-                        .run_if(|h: Res<HintSystem>, d: Res<DebugMode>| h.is_changed() || d.is_changed())
+                        .run_if(|h: Res<HintSystem>, d: Res<DebugMode>| {
+                            h.is_changed() || d.is_changed()
+                        })
                         .run_if(in_state(AppState::Ready)),
                     update_debug_status_display
                         .run_if(resource_changed::<DebugMode>)
