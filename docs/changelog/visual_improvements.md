@@ -1,5 +1,18 @@
 # Visual Distinction Improvements
 
+> **UI/UX Enhancement Documentation** - Given vs Player Cell Distinction
+
+This document details the visual improvements implemented in v2.0.0 to clearly distinguish between puzzle givens and player-entered numbers, enhancing the overall user experience.
+
+## Related Documentation
+
+- **[Main CHANGELOG](../../CHANGELOG.md)** - Complete v2.0.0 release notes  
+- **[UX Specification](../architecture/ux_specification.md)** - Comprehensive UX design guidelines
+- **[Future Roadmap](roadmap.md)** - Planned visual and theming enhancements
+- **[Main README](../../README.md)** - Current visual features overview
+
+---
+
 ## Problem
 The generated puzzle numbers (givens) looked too similar to player-entered numbers, making it difficult to distinguish between permanent puzzle pieces and user input.
 

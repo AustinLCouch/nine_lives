@@ -2,13 +2,31 @@
 //!
 //! This crate contains the user interface components, systems, and resources
 //! for the Nine Lives Cat Sudoku game. It handles:
-//! - UI components (Cell, ClearButton)
-//! - Presentation resources (CatEmojis)
-//! - Rendering systems
-//! - Application states
+//! - UI components (Cell, ClearButton, PresetButton, etc.)
+//! - Presentation resources (CatEmojis, Theme, SelectedPreset)
+//! - Rendering systems and visual feedback
+//! - Application states (Loading, Customization, Ready)
+//!
+//! ## Preset Button Highlighting Architecture
+//!
+//! The preset button highlighting uses a two-system approach that respects MVC separation:
+//!
+//! 1. **`handle_preset_selection`**: Controller system that handles user interactions
+//!    - Processes button presses and hover states
+//!    - Updates the `SelectedPreset` resource when a button is clicked
+//!    - Provides immediate visual feedback for pressed/hover states
+//!
+//! 2. **`sync_preset_button_highlights`**: View system that reflects state changes
+//!    - Runs only when `SelectedPreset` resource changes (`resource_changed` condition)
+//!    - Updates all preset buttons to show correct selected/normal styling
+//!    - Ensures consistent visual state across all buttons
+//!
+//! This separation ensures that when a user selects a new preset, both the previously
+//! selected button (deselected) and the newly selected button (selected) get properly
+//! updated, fixing the highlighting sync issue.
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession, HintSystem, DebugMode};
+use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession, HintSystem, DebugMode, PresetKind, PuzzleSettings, Solution, GameHistory};
 use std::collections::HashSet;
 
 // --- UI Components ---
@@ -56,6 +74,34 @@ pub struct DebugStatusDisplay;
 #[derive(Component)]
 pub struct HintedCell {
     pub timer: Timer,
+}
+
+/// Component to tag preset selection buttons.
+#[derive(Component)]
+pub struct PresetButton {
+    pub preset_id: usize,
+}
+
+/// Component to tag the "Start Game" button on the customization screen.
+#[derive(Component)]
+pub struct StartGameButton;
+
+/// Component to tag the settings summary text display.
+#[derive(Component)]
+pub struct SettingsSummary;
+
+/// Component to tag the customization screen root for cleanup.
+#[derive(Component)]
+pub struct CustomizationScreenRoot;
+
+/// Component to tag the game screen root for cleanup.
+#[derive(Component)]
+pub struct GameScreenRoot;
+
+/// Resource to track the currently selected preset on the customization screen.
+#[derive(Resource, Clone, Debug, PartialEq, Eq)]
+pub struct SelectedPreset {
+    pub preset: PresetKind,
 }
 
 // --- UI Resources ---
@@ -125,13 +171,34 @@ impl Theme {
 
 // --- Application States ---
 
-/// Defines the different states of the application, like loading assets vs. running the game.
+/// Defines the different states of the application flow.
+/// Loading -> Customization -> Ready (gameplay)
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum AppState {
     #[default]
     Loading,
+    Customization,
     Ready,
 }
+
+// --- Color Constants for Preset Buttons ---
+
+/// Normal preset button background color
+const PRESET_NORMAL_BG: Color = Color::srgb(0.2, 0.2, 0.3);
+/// Normal preset button border color
+const PRESET_NORMAL_BORDER: Color = Color::srgb(0.4, 0.4, 0.5);
+/// Selected preset button background color
+const PRESET_SELECTED_BG: Color = Color::srgb(0.2, 0.4, 0.2);
+/// Selected preset button border color
+const PRESET_SELECTED_BORDER: Color = Color::srgb(0.3, 0.6, 0.3);
+/// Hovered preset button background color
+const PRESET_HOVER_BG: Color = Color::srgb(0.25, 0.25, 0.4);
+/// Hovered preset button border color
+const PRESET_HOVER_BORDER: Color = Color::srgb(0.5, 0.5, 0.6);
+/// Pressed preset button background color
+const PRESET_PRESSED_BG: Color = Color::srgb(0.3, 0.5, 0.3);
+/// Pressed preset button border color
+const PRESET_PRESSED_BORDER: Color = Color::srgb(0.4, 0.7, 0.4);
 
 // --- Helper Functions ---
 
@@ -540,21 +607,309 @@ pub fn update_cell_hover_effects(
     }
 }
 
+/// Initialize the SelectedPreset resource.
+pub fn setup_selected_preset(mut commands: Commands) {
+    commands.insert_resource(SelectedPreset {
+        preset: PresetKind::default(), // Default to Cozy Kitten
+    });
+}
+
+/// System that synchronizes preset button highlighting based on the currently selected preset.
+/// This system reacts to changes in the SelectedPreset resource and updates all preset buttons
+/// to reflect the correct visual state (selected vs normal).
+pub fn sync_preset_button_highlights(
+    selected_preset: Res<SelectedPreset>,
+    mut preset_buttons: Query<(&PresetButton, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    if selected_preset.is_changed() {
+        let presets = PresetKind::all();
+        
+        for (preset_button, mut bg_color, mut border_color) in &mut preset_buttons {
+            if let Some(preset) = presets.get(preset_button.preset_id) {
+                if *preset == selected_preset.preset {
+                    // Apply selected styling
+                    *bg_color = BackgroundColor(PRESET_SELECTED_BG);
+                    *border_color = BorderColor(PRESET_SELECTED_BORDER);
+                } else {
+                    // Apply normal styling
+                    *bg_color = BackgroundColor(PRESET_NORMAL_BG);
+                    *border_color = BorderColor(PRESET_NORMAL_BORDER);
+                }
+            }
+        }
+    }
+}
+
+/// Initialize the camera once at startup.
+/// This is the only camera spawn in the application - created during the Loading state.
+pub fn setup_camera(mut commands: Commands) {
+    commands.spawn(Camera2d);
+}
+
+/// System that creates the customization screen UI.
+pub fn setup_customization_screen(mut commands: Commands) {
+    // Create the main customization UI
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.15, 0.15, 0.25)),
+            CustomizationScreenRoot, // Tag for cleanup
+        ))
+        .with_children(|parent| {
+            // Game Title
+            parent.spawn((
+                Text::new("Nine Lives: Cat Sudoku"),
+                TextFont {
+                    font_size: 36.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                Node {
+                    margin: UiRect::bottom(Val::Px(40.0)),
+                    ..default()
+                },
+            ));
+            
+            // Subtitle
+            parent.spawn((
+                Text::new("Choose your purrfect puzzle difficulty"),
+                TextFont {
+                    font_size: 18.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.8, 0.8, 0.9)),
+                Node {
+                    margin: UiRect::bottom(Val::Px(30.0)),
+                    ..default()
+                },
+            ));
+            
+            // Preset selection grid
+            parent
+                .spawn((
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: RepeatedGridTrack::flex(2, 1.0),
+                        grid_template_rows: RepeatedGridTrack::flex(2, 1.0),
+                        column_gap: Val::Px(20.0),
+                        row_gap: Val::Px(20.0),
+                        margin: UiRect::bottom(Val::Px(30.0)),
+                        ..default()
+                    },
+                ))
+                .with_children(|grid_parent| {
+                    // Create preset buttons
+                    for (index, preset) in PresetKind::all().iter().enumerate() {
+                        grid_parent
+                            .spawn((
+                                Button,
+                                PresetButton { preset_id: index },
+                                Node {
+                                    width: Val::Px(280.0),
+                                    height: Val::Px(120.0),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::FlexStart,
+                                    flex_direction: FlexDirection::Column,
+                                    padding: UiRect::all(Val::Px(15.0)),
+                                    border: UiRect::all(Val::Px(2.0)),
+                                    ..default()
+                                },
+                                BackgroundColor(PRESET_NORMAL_BG),
+                                BorderColor(PRESET_NORMAL_BORDER),
+                            ))
+                            .with_children(|button_parent| {
+                                // Preset name
+                                button_parent.spawn((
+                                    Text::new(preset.display_name()),
+                                    TextFont {
+                                        font_size: 16.0,
+                                        ..default()
+                                    },
+                                    TextColor(Color::WHITE),
+                                    Node {
+                                        margin: UiRect::bottom(Val::Px(8.0)),
+                                        ..default()
+                                    },
+                                ));
+                                
+                                // Preset description
+                                button_parent.spawn((
+                                    Text::new(preset.description()),
+                                    TextFont {
+                                        font_size: 12.0,
+                                        ..default()
+                                    },
+                                    TextColor(Color::srgb(0.8, 0.8, 0.9)),
+                                    Node {
+                                        ..default()
+                                    },
+                                ));
+                            });
+                    }
+                });
+            
+            // Settings summary display
+            parent.spawn((
+                Text::new("Perfect for beginners. Lots of clues, helpful hints, and forgiving rules."),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.9, 0.7)),
+                Node {
+                    margin: UiRect::bottom(Val::Px(30.0)),
+                    max_width: Val::Px(500.0),
+                    ..default()
+                },
+                SettingsSummary,
+            ));
+            
+            // Start Game button
+            parent
+                .spawn((
+                    Button,
+                    StartGameButton,
+                    Node {
+                        width: Val::Px(200.0),
+                        height: Val::Px(50.0),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        border: UiRect::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.2, 0.7, 0.2)),
+                    BorderColor(Color::srgb(0.3, 0.8, 0.3)),
+                ))
+                .with_children(|button_parent| {
+                    button_parent.spawn((
+                        Text::new("🎯 Start Game"),
+                        TextFont {
+                            font_size: 18.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+        });
+    
+    println!("Nine Lives Cat Sudoku customization screen initialized!");
+}
+
+/// System to clean up the customization screen when exiting that state.
+pub fn cleanup_customization_screen(
+    mut commands: Commands,
+    query: Query<Entity, With<CustomizationScreenRoot>>,
+) {
+    for entity in &query {
+        commands.entity(entity).despawn();
+    }
+    println!("Cleaned up customization screen");
+}
+
+/// System to clean up the game screen when exiting that state.
+pub fn cleanup_game_screen(
+    mut commands: Commands,
+    query: Query<Entity, With<GameScreenRoot>>,
+) {
+    for entity in &query {
+        commands.entity(entity).despawn();
+    }
+    println!("Cleaned up game screen");
+}
+
+/// System to handle preset button interactions and update the selected preset.
+/// This system only handles interaction states and updates the SelectedPreset resource.
+/// Visual highlighting is handled separately by sync_preset_button_highlights.
+pub fn handle_preset_selection(
+    mut interaction_query: Query<(&Interaction, &PresetButton, &mut BackgroundColor, &mut BorderColor), Changed<Interaction>>,
+    mut selected_preset: ResMut<SelectedPreset>,
+) {
+    for (interaction, preset_button, mut bg_color, mut border_color) in &mut interaction_query {
+        match interaction {
+            Interaction::Pressed => {
+                // Update the selected preset
+                let presets = PresetKind::all();
+                if let Some(new_preset) = presets.get(preset_button.preset_id) {
+                    selected_preset.preset = *new_preset;
+                    println!("Selected preset: {:?}", new_preset);
+                }
+                
+                // Visual feedback - pressed state only
+                *bg_color = BackgroundColor(PRESET_PRESSED_BG);
+                *border_color = BorderColor(PRESET_PRESSED_BORDER);
+            }
+            Interaction::Hovered => {
+                // Only apply hover if this button is not currently selected
+                let presets = PresetKind::all();
+                if let Some(preset) = presets.get(preset_button.preset_id) {
+                    if *preset != selected_preset.preset {
+                        *bg_color = BackgroundColor(PRESET_HOVER_BG);
+                        *border_color = BorderColor(PRESET_HOVER_BORDER);
+                    }
+                }
+            }
+            Interaction::None => {
+                // Don't set colors here - sync_preset_button_highlights handles this
+                // This allows proper state management through the SelectedPreset resource
+            }
+        }
+    }
+}
+
+/// System to update the settings summary when the selected preset changes.
+pub fn update_settings_summary(
+    selected_preset: Res<SelectedPreset>,
+    mut summary_query: Query<&mut Text, With<SettingsSummary>>,
+) {
+    if selected_preset.is_changed() {
+        let settings = PuzzleSettings::from_preset(selected_preset.preset);
+        let summary_text = settings.description();
+        
+        for mut text in &mut summary_query {
+            text.0 = summary_text.clone();
+        }
+    }
+}
+
+/// System to handle Start Game button hover effects.
+pub fn update_start_button_colors(
+    mut button_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (With<StartGameButton>, Changed<Interaction>),
+    >,
+) {
+    for (interaction, mut bg_color) in &mut button_query {
+        match interaction {
+            Interaction::Pressed => *bg_color = BackgroundColor(Color::srgb(0.15, 0.5, 0.15)),
+            Interaction::Hovered => *bg_color = BackgroundColor(Color::srgb(0.25, 0.8, 0.25)),
+            Interaction::None => *bg_color = BackgroundColor(Color::srgb(0.2, 0.7, 0.2)),
+        }
+    }
+}
+
 /// System that creates the visual 9x9 sudoku grid with clickable cells
 pub fn setup_grid(mut commands: Commands) {
-    // Spawn the camera
-    commands.spawn(Camera2d);
 
     // Create the main UI root node
     commands
-        .spawn(Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            flex_direction: FlexDirection::Column,
-            ..default()
-        })
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            GameScreenRoot, // Tag for potential cleanup
+        ))
         .with_children(|parent| {
             // Title
             parent.spawn((
@@ -851,17 +1206,65 @@ pub fn setup_grid(mut commands: Commands) {
                 });
         });
 
-    println!("Nine Lives Cat Sudoku UI initialized!");
+    println!("🎮 Nine Lives Cat Sudoku GAME SCREEN initialized!");
 }
 
-/// A system that transitions the app from `Loading` to `Ready` once resources are loaded.
-pub fn transition_to_ready(
+/// A system that transitions the app from `Loading` to `Customization` once resources are loaded.
+pub fn transition_to_customization(
     mut app_state: ResMut<NextState<AppState>>,
     cat_emojis: Option<Res<CatEmojis>>,
+    selected_preset: Option<Res<SelectedPreset>>,
 ) {
-    // We transition once the CatEmojis resource exists.
-    if cat_emojis.is_some() {
-        app_state.set(AppState::Ready);
+    // We transition once all required resources are loaded
+    if cat_emojis.is_some() && selected_preset.is_some() {
+        app_state.set(AppState::Customization);
+    }
+}
+
+/// A system that transitions from `Customization` to `Ready` when "Start Game" is pressed.
+/// This system also generates the initial puzzle using the selected settings.
+pub fn transition_to_game(
+    mut app_state: ResMut<NextState<AppState>>,
+    mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
+    selected_preset: Res<SelectedPreset>,
+    mut commands: Commands,
+    mut board: ResMut<BoardState>,
+    mut session: ResMut<GameSession>,
+    mut history: ResMut<GameHistory>,
+    mut solution: ResMut<Solution>,
+    mut hint_system: ResMut<HintSystem>,
+) {
+    for interaction in &mut interaction_query {
+        if *interaction == Interaction::Pressed {
+            println!("🎯 Start Game button pressed!");
+            
+            // Store the selected settings as a resource for the game to use
+            let settings = PuzzleSettings::from_preset(selected_preset.preset);
+            println!("📋 Generated settings: {}", settings.description());
+            commands.insert_resource(settings.clone());
+            
+            // Generate a new puzzle using the selected settings
+            if let Some(new_solution) = board.generate_puzzle_with_settings(&settings) {
+                *solution = new_solution;
+                println!("Generated new puzzle with settings: {}", settings.description());
+            } else {
+                // Fallback: generate a simple puzzle if the advanced generation fails
+                *solution = board.generate_puzzle(35); // Default easy puzzle
+                println!("Fallback: Generated simple puzzle (advanced generation failed)");
+            }
+            
+            // Reset the session timer and move counter
+            session.reset();
+            // Clear move history
+            history.clear();
+            // Reset hints based on settings
+            hint_system.reset(settings.max_hints);
+            
+            // Transition to the game screen
+            println!("🔄 Transitioning to Ready state...");
+            app_state.set(AppState::Ready);
+            println!("✅ State transition triggered for preset: {:?}", selected_preset.preset);
+        }
     }
 }
 
@@ -872,11 +1275,35 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>()
-            .add_systems(Startup, (setup_theme, setup_cat_emojis))
+            // Startup: Initialize resources
+            .add_systems(Startup, (
+                setup_camera,
+                setup_theme, 
+                setup_cat_emojis, 
+                setup_selected_preset
+            ))
+            // State transitions
+            .add_systems(OnEnter(AppState::Customization), setup_customization_screen)
+            .add_systems(OnExit(AppState::Customization), cleanup_customization_screen)
             .add_systems(OnEnter(AppState::Ready), setup_grid)
+            .add_systems(OnExit(AppState::Ready), cleanup_game_screen)
+            // Update systems
             .add_systems(
                 Update,
                 (
+                    // Loading state systems
+                    transition_to_customization.run_if(in_state(AppState::Loading)),
+                    
+                    // Customization state systems
+                    handle_preset_selection.run_if(in_state(AppState::Customization)),
+                    sync_preset_button_highlights
+                        .run_if(resource_changed::<SelectedPreset>)
+                        .run_if(in_state(AppState::Customization)),
+                    update_settings_summary.run_if(in_state(AppState::Customization)),
+                    update_start_button_colors.run_if(in_state(AppState::Customization)),
+                    transition_to_game.run_if(in_state(AppState::Customization)),
+                    
+                    // Game state systems
                     update_cell_text
                         .run_if(resource_changed::<BoardState>)
                         .run_if(in_state(AppState::Ready)),
@@ -900,7 +1327,6 @@ impl Plugin for UiPlugin {
                         .run_if(resource_changed::<DebugMode>)
                         .run_if(in_state(AppState::Ready)),
                     tick_timer_display.run_if(in_state(AppState::Ready)),
-                    transition_to_ready.run_if(in_state(AppState::Loading)),
                 ),
             );
     }

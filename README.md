@@ -171,7 +171,16 @@ cargo test -- --nocapture
 - **Controller**: Event handling and orchestration
 - **Dependencies**: Controller → UI → Core (unidirectional)
 
-See `WARP.md` for detailed development guidance.
+## 📚 Documentation
+
+**Quick Links:**
+- **[📖 Complete Documentation](docs/README.md)** - Comprehensive documentation hub
+- **[🏗️ Architecture Guide](docs/architecture/mvc_overview.md)** - MVC implementation details  
+- **[🛠️ Development Guide](docs/development/guide.md)** - Commands and workflows
+- **[🧪 Testing Strategy](docs/development/testing.md)** - Testing approaches
+- **[🎨 UX Specification](docs/architecture/ux_specification.md)** - User experience design
+- **[🗺️ Future Roadmap](docs/changelog/roadmap.md)** - Planned enhancements
+- **[⚙️ WARP.md](WARP.md)** - Warp.dev development guidance
 
 ## 🚀 Version 2.0.0 Highlights
 
@@ -219,7 +228,13 @@ See `WARP.md` for detailed development guidance.
 
 ## 🤝 Contributing
 
-Contributions welcome! Please see the architectural guidelines in `design/api_analysis.md` and follow the MVC pattern. All new features should include comprehensive tests.
+Contributions welcome! Please see the [architectural guidelines](docs/architecture/mvc_overview.md) and [development guide](docs/development/guide.md), and follow the MVC pattern. All new features should include comprehensive tests.
+
+### Getting Started
+1. Read the [Architecture Overview](docs/architecture/mvc_overview.md) to understand the codebase structure
+2. Follow the [Development Guide](docs/development/guide.md) for setup and workflow
+3. Review the [Testing Strategy](docs/development/testing.md) for testing requirements
+4. Check the [Future Roadmap](docs/changelog/roadmap.md) for planned features
 
 ## 📄 License
 
