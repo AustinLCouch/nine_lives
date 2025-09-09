@@ -113,6 +113,14 @@ pub struct CatEmojis {
     pub emojis: Vec<String>,
 }
 
+/// Resource containing font handles for different text styles.
+/// Uses MonoLisa font for better readability and visual consistency.
+#[derive(Resource)]
+pub struct FontAssets {
+    pub regular: Handle<Font>,
+    pub cat_display: Handle<Font>, // Specialized font handle for cat ASCII art
+}
+
 /// Theme system for visual customization.
 #[derive(Resource, Clone, Debug)]
 pub struct Theme {
@@ -221,6 +229,19 @@ fn get_cell_background_color(row: usize, col: usize, theme: &Theme) -> Color {
 /// A system that initializes the theme resource.
 pub fn setup_theme(mut commands: Commands) {
     commands.insert_resource(Theme::default());
+}
+
+/// A system that loads font assets for the UI.
+/// Loads MonoLisa font for better readability of ASCII cats.
+pub fn setup_fonts(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let font_handle = asset_server.load("fonts/MonoLisa.ttf");
+    
+    commands.insert_resource(FontAssets {
+        regular: font_handle.clone(),
+        cat_display: font_handle, // Using same font for both, but keeping structure for future expansion
+    });
+    
+    println!("🔤 Font assets loaded: MonoLisa for enhanced cat visibility!");
 }
 
 /// A system that loads the cat ASCII art into the `CatEmojis` resource.
@@ -647,7 +668,7 @@ pub fn setup_camera(mut commands: Commands) {
 }
 
 /// System that creates the customization screen UI.
-pub fn setup_customization_screen(mut commands: Commands) {
+pub fn setup_customization_screen(mut commands: Commands, fonts: Res<FontAssets>) {
     // Create the main customization UI
     commands
         .spawn((
@@ -667,6 +688,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
             parent.spawn((
                 Text::new("Nine Lives: Cat Sudoku"),
                 TextFont {
+                    font: fonts.regular.clone(),
                     font_size: 36.0,
                     ..default()
                 },
@@ -681,6 +703,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
             parent.spawn((
                 Text::new("Choose your purrfect puzzle difficulty"),
                 TextFont {
+                    font: fonts.regular.clone(),
                     font_size: 18.0,
                     ..default()
                 },
@@ -729,6 +752,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                                 button_parent.spawn((
                                     Text::new(preset.display_name()),
                                     TextFont {
+                                        font: fonts.regular.clone(),
                                         font_size: 16.0,
                                         ..default()
                                     },
@@ -743,6 +767,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                                 button_parent.spawn((
                                     Text::new(preset.description()),
                                     TextFont {
+                                        font: fonts.regular.clone(),
                                         font_size: 12.0,
                                         ..default()
                                     },
@@ -759,6 +784,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
             parent.spawn((
                 Text::new("Perfect for beginners. Lots of clues, helpful hints, and forgiving rules."),
                 TextFont {
+                    font: fonts.regular.clone(),
                     font_size: 14.0,
                     ..default()
                 },
@@ -791,6 +817,7 @@ pub fn setup_customization_screen(mut commands: Commands) {
                     button_parent.spawn((
                         Text::new("🎯 Start Game"),
                         TextFont {
+                            font: fonts.regular.clone(),
                             font_size: 18.0,
                             ..default()
                         },
@@ -895,7 +922,7 @@ pub fn update_start_button_colors(
 }
 
 /// System that creates the visual 9x9 sudoku grid with clickable cells
-pub fn setup_grid(mut commands: Commands) {
+pub fn setup_grid(mut commands: Commands, fonts: Res<FontAssets>) {
 
     // Create the main UI root node
     commands
@@ -915,6 +942,7 @@ pub fn setup_grid(mut commands: Commands) {
             parent.spawn((
                 Text::new("Nine Lives: Cat Sudoku"),
                 TextFont {
+                    font: fonts.regular.clone(),
                     font_size: 32.0,
                     ..default()
                 },
@@ -943,6 +971,7 @@ pub fn setup_grid(mut commands: Commands) {
                     info_parent.spawn((
                         Text::new("Time: 00:00"),
                         TextFont {
+                            font: fonts.regular.clone(),
                             font_size: 16.0,
                             ..default()
                         },
@@ -954,6 +983,7 @@ pub fn setup_grid(mut commands: Commands) {
                     info_parent.spawn((
                         Text::new("Moves: 0"),
                         TextFont {
+                            font: fonts.regular.clone(),
                             font_size: 16.0,
                             ..default()
                         },
@@ -966,6 +996,7 @@ pub fn setup_grid(mut commands: Commands) {
             parent.spawn((
                 Text::new("Press ⌘D (Mac) or Ctrl+D (PC) for debug mode"),
                 TextFont {
+                    font: fonts.regular.clone(),
                     font_size: 12.0,
                     ..default()
                 },
@@ -1015,10 +1046,12 @@ pub fn setup_grid(mut commands: Commands) {
                                 ))
                                 .with_children(|cell_parent| {
                                     // Text node for displaying the multi-line cat ASCII art
+                                    // Using MonoLisa font with larger size for better visibility
                                     cell_parent.spawn((
                                         Text::new(" "),
                                         TextFont {
-                                            font_size: 8.0,
+                                            font: fonts.cat_display.clone(),
+                                            font_size: 9.5, // Slightly larger for better visibility
                                             ..default()
                                         },
                                         TextColor(Color::BLACK),
@@ -1076,6 +1109,7 @@ pub fn setup_grid(mut commands: Commands) {
                                     button_parent.spawn((
                                         Text::new("New Game"),
                                         TextFont {
+                                            font: fonts.regular.clone(),
                                             font_size: 14.0,
                                             ..default()
                                         },
@@ -1103,6 +1137,7 @@ pub fn setup_grid(mut commands: Commands) {
                                     button_parent.spawn((
                                         Text::new("Clear Board"),
                                         TextFont {
+                                            font: fonts.regular.clone(),
                                             font_size: 14.0,
                                             ..default()
                                         },
@@ -1142,6 +1177,7 @@ pub fn setup_grid(mut commands: Commands) {
                                     button_parent.spawn((
                                         Text::new("⟲ Undo"),
                                         TextFont {
+                                            font: fonts.regular.clone(),
                                             font_size: 12.0,
                                             ..default()
                                         },
@@ -1169,6 +1205,7 @@ pub fn setup_grid(mut commands: Commands) {
                                     button_parent.spawn((
                                         Text::new("⟳ Redo"),
                                         TextFont {
+                                            font: fonts.regular.clone(),
                                             font_size: 12.0,
                                             ..default()
                                         },
@@ -1196,6 +1233,7 @@ pub fn setup_grid(mut commands: Commands) {
                                     button_parent.spawn((
                                         Text::new("💡 Hint"),
                                         TextFont {
+                                            font: fonts.regular.clone(),
                                             font_size: 12.0,
                                             ..default()
                                         },
@@ -1214,9 +1252,10 @@ pub fn transition_to_customization(
     mut app_state: ResMut<NextState<AppState>>,
     cat_emojis: Option<Res<CatEmojis>>,
     selected_preset: Option<Res<SelectedPreset>>,
+    fonts: Option<Res<FontAssets>>,
 ) {
     // We transition once all required resources are loaded
-    if cat_emojis.is_some() && selected_preset.is_some() {
+    if cat_emojis.is_some() && selected_preset.is_some() && fonts.is_some() {
         app_state.set(AppState::Customization);
     }
 }
@@ -1279,6 +1318,7 @@ impl Plugin for UiPlugin {
             .add_systems(Startup, (
                 setup_camera,
                 setup_theme, 
+                setup_fonts,
                 setup_cat_emojis, 
                 setup_selected_preset
             ))

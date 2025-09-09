@@ -9,6 +9,7 @@
 /// - Connecting model and view layers
 
 use bevy::prelude::*;
+use bevy::asset::AssetPlugin;
 use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint, PuzzleSettings};
 use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton, UndoButton, RedoButton, HintButton};
 
@@ -257,6 +258,10 @@ pub fn run_game() {
                 resolution: (700., 800.).into(),
                 ..default()
             }),
+            ..default()
+        }).set(AssetPlugin {
+            // Set asset path relative to workspace root, not crate root
+            file_path: "../assets".to_string(),
             ..default()
         }))
         // Initialize the core game state from the model layer
