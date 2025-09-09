@@ -9,7 +9,7 @@
 /// - Connecting model and view layers
 
 use bevy::prelude::*;
-use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint};
+use nine_lives_core::{BoardState, GameSession, GameState, GameHistory, HintSystem, Solution, DebugMode, get_next_hint, PuzzleSettings};
 use nine_lives_ui::{AppState, CatEmojis, Cell, ClearButton, NewGameButton, UndoButton, RedoButton, HintButton};
 
 // --- Controller Systems ---
@@ -48,26 +48,18 @@ pub fn clear_button_system(
     }
 }
 
-/// A system that handles clicks on the "New Game" button. This generates a fresh puzzle.
+/// A system that handles clicks on the "New Game" button.
+/// This transitions back to the customization screen where the user can select new settings.
 pub fn new_game_button_system(
     mut interaction_query: Query<&Interaction, (Changed<Interaction>, With<NewGameButton>)>,
-    mut board: ResMut<BoardState>,
-    mut session: ResMut<GameSession>,
-    mut history: ResMut<GameHistory>,
-    mut solution: ResMut<Solution>,
-    mut hint_system: ResMut<HintSystem>,
+    mut app_state: ResMut<NextState<AppState>>,
 ) {
     for interaction in &mut interaction_query {
         if *interaction == Interaction::Pressed {
-            // Generate a new easy puzzle and store the solution
-            *solution = board.generate_easy_puzzle();
-            // Reset the session timer and move counter
-            session.reset();
-            // Clear move history
-            history.clear();
-            // Reset hints (3 hints for easy puzzles)
-            hint_system.reset(3);
-            println!("Generated new puzzle!");
+            println!("🔄 New Game button pressed - returning to customization screen");
+            
+            // Transition back to customization screen
+            app_state.set(AppState::Customization);
         }
     }
 }
@@ -275,6 +267,7 @@ pub fn run_game() {
         .init_resource::<Solution>()
         .init_resource::<HintSystem>()
         .init_resource::<DebugMode>()
+        .init_resource::<PuzzleSettings>()
         // Add the UI layer (view)
         .add_plugins(nine_lives_ui::UiPlugin)
         // Add controller systems
