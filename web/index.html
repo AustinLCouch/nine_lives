@@ -140,16 +140,19 @@
             try {
                 updateProgress(10, 'Loading game files...');
                 
-                // Import the init function
-                const { default: init } = await import('./nine_lives.js');
+                // Import the init function and wasm module
+                const wasm = await import('./nine_lives.js');
                 updateProgress(30, 'Downloading game engine...');
                 
                 // Add artificial delay to show progress for fast connections
                 await new Promise(resolve => setTimeout(resolve, 500));
                 updateProgress(60, 'Initializing WebAssembly...');
                 
-                // Initialize the WASM
-                await init();
+                // Initialize the WASM module
+                await wasm.default();
+                updateProgress(80, 'Starting game engine...');
+                
+                // The game should start automatically via the #[wasm_bindgen(start)] function
                 updateProgress(90, 'Starting game...');
                 
                 // Give a moment for Bevy to initialize

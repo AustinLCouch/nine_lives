@@ -2833,9 +2833,11 @@ name = "nine_lives_controller"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "console_error_panic_hook",
  "nine_lives_core",
  "nine_lives_ui",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

@@ -1,2 +1,7 @@
 [target.wasm32-unknown-unknown]
 runner = "wasm-server-runner"
+# Increase stack size for WASM (fixes Safari "unreachable code" errors)
+rustflags = [
+  "-C", "link-arg=-z",
+  "-C", "link-arg=stack-size=1048576",  # 1MB stack
+]

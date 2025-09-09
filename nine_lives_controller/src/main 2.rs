@@ -8,25 +8,8 @@
 
 use nine_lives_controller::run_game;
 
-// WASM entry point
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
-// Export a WASM-bindgen compatible start function
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn start() {
-    run_game();
-}
-
-// Standard desktop entry point
-#[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    // Run the Nine Lives Cat Sudoku game
+    // The controller orchestrates the entire application
     run_game();
-}
-
-// Fallback main for WASM builds (should not be called)
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    // This should not be called in WASM builds, but we provide it for completeness
 }

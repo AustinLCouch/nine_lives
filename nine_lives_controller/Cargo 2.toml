@@ -10,12 +10,10 @@ path = "src/main.rs"
 [features]
 default = ["native"]
 native = ["bevy/default"]
-web = ["bevy/webgl2", "bevy/png", "wasm-bindgen", "console_error_panic_hook", "web-sys"]
+web = ["bevy/webgl2", "bevy/png"]
 
 [dependencies]
 bevy = { version = "0.16.1", default-features = false, features = ["bevy_winit", "bevy_asset", "bevy_sprite", "bevy_ui"] }
 nine_lives_core = { path = "../nine_lives_core" }
 nine_lives_ui = { path = "../nine_lives_ui" }
 wasm-bindgen = { version = "0.2", optional = true }
-console_error_panic_hook = { version = "0.1", optional = true }
-web-sys = { version = "0.3", optional = true }

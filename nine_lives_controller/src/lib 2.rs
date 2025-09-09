@@ -242,22 +242,6 @@ pub fn add_controller(app: &mut App) {
     );
 }
 
-/// Initialize WASM-specific features
-#[cfg(target_arch = "wasm32")]
-fn init_wasm() {
-    use wasm_bindgen::prelude::*;
-    
-    // Set up panic hook for better error reporting
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
-    
-    // Enable console logging
-    #[cfg(feature = "web-sys")]
-    {
-        web_sys::console::log_1(&"Nine Lives: Initializing WASM...".into());
-    }
-}
-
 /// Main entry point for running the Nine Lives Cat Sudoku game.
 /// This function sets up the complete application by:
 /// 1. Creating a Bevy App with default plugins
@@ -266,9 +250,6 @@ fn init_wasm() {
 /// 4. Adding the controller layer (event handling)
 /// 5. Running the game loop
 pub fn run_game() {
-    // Initialize WASM-specific features
-    #[cfg(target_arch = "wasm32")]
-    init_wasm();
     let mut app = App::new();
     
     // Configure plugins for web or desktop
