@@ -3,6 +3,10 @@ name = "nine_lives_core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+web = []
+
 [dependencies]
 # Minimal Bevy for Resource derive
 bevy = { version = "0.16.1", default-features = false }

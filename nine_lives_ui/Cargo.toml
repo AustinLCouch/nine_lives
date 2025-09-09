@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = ["native"]
 native = ["bevy/default"]
-web = ["bevy/webgl2", "bevy/png"]
+web = ["bevy/webgl2", "bevy/png", "nine_lives_core/web"]
 
 [dependencies]
 bevy = { version = "0.16.1", default-features = false, features = ["bevy_winit", "bevy_asset", "bevy_sprite", "bevy_ui"] }

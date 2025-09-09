@@ -280,7 +280,6 @@ fn configure_default_plugins() -> PluginGroupBuilder {
 /// Initialize WASM-specific features
 #[cfg(target_arch = "wasm32")]
 fn init_wasm() {
-    use wasm_bindgen::prelude::*;
 
     // Set up panic hook for better error reporting
     #[cfg(feature = "console_error_panic_hook")]

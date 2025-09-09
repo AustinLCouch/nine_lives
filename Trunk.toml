@@ -1,7 +1,7 @@
 [build]
-target = "index.html"
+target = "nine_lives_controller/index.html"
 dist = "dist"
-public_url = "."
+public_url = "/nine_lives/"
 filehash = false
 
 [tools.rust]
@@ -12,6 +12,7 @@ bin = "nine_lives"
 [serve]
 address = "127.0.0.1"
 port = 8080
+open = true
 
 [watch]
 ignore = ["dist", "target"]

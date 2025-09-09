@@ -3,6 +3,9 @@ name = "nine_lives_controller"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "nine_lives"
 path = "src/main.rs"
@@ -10,12 +13,12 @@ path = "src/main.rs"
 [features]
 default = ["native"]
 native = ["bevy/default"]
-web = ["bevy/webgl2", "bevy/png", "wasm-bindgen", "console_error_panic_hook", "web-sys"]
+web = ["bevy/webgl2", "bevy/png", "bevy/vorbis", "nine_lives_ui/web", "nine_lives_core/web", "wasm-bindgen", "console_error_panic_hook", "web-sys"]
 
 [dependencies]
-bevy = { version = "0.16.1", default-features = false, features = ["bevy_winit", "bevy_asset", "bevy_sprite", "bevy_ui"] }
+bevy = { version = "0.16.1", default-features = false, features = ["bevy_winit", "bevy_asset", "bevy_sprite", "bevy_ui", "bevy_text", "bevy_render"] }
 nine_lives_core = { path = "../nine_lives_core" }
-nine_lives_ui = { path = "../nine_lives_ui" }
+nine_lives_ui = { path = "../nine_lives_ui", features = [] }
 wasm-bindgen = { version = "0.2", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 web-sys = { version = "0.3", optional = true }
