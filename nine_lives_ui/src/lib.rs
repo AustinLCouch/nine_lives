@@ -2,10 +2,28 @@
 //!
 //! This crate contains the user interface components, systems, and resources
 //! for the Nine Lives Cat Sudoku game. It handles:
-//! - UI components (Cell, ClearButton)
-//! - Presentation resources (CatEmojis)
-//! - Rendering systems
-//! - Application states
+//! - UI components (Cell, ClearButton, PresetButton, etc.)
+//! - Presentation resources (CatEmojis, Theme, SelectedPreset)
+//! - Rendering systems and visual feedback
+//! - Application states (Loading, Customization, Ready)
+//!
+//! ## Preset Button Highlighting Architecture
+//!
+//! The preset button highlighting uses a two-system approach that respects MVC separation:
+//!
+//! 1. **`handle_preset_selection`**: Controller system that handles user interactions
+//!    - Processes button presses and hover states
+//!    - Updates the `SelectedPreset` resource when a button is clicked
+//!    - Provides immediate visual feedback for pressed/hover states
+//!
+//! 2. **`sync_preset_button_highlights`**: View system that reflects state changes
+//!    - Runs only when `SelectedPreset` resource changes (`resource_changed` condition)
+//!    - Updates all preset buttons to show correct selected/normal styling
+//!    - Ensures consistent visual state across all buttons
+//!
+//! This separation ensures that when a user selects a new preset, both the previously
+//! selected button (deselected) and the newly selected button (selected) get properly
+//! updated, fixing the highlighting sync issue.
 
 use bevy::prelude::*;
 use nine_lives_core::{BoardState, GRID_SIZE, GameState, GameSession, HintSystem, DebugMode, PresetKind, PuzzleSettings, Solution, GameHistory};
@@ -81,7 +99,7 @@ pub struct CustomizationScreenRoot;
 pub struct GameScreenRoot;
 
 /// Resource to track the currently selected preset on the customization screen.
-#[derive(Resource, Clone, Debug)]
+#[derive(Resource, Clone, Debug, PartialEq, Eq)]
 pub struct SelectedPreset {
     pub preset: PresetKind,
 }
@@ -162,6 +180,25 @@ pub enum AppState {
     Customization,
     Ready,
 }
+
+// --- Color Constants for Preset Buttons ---
+
+/// Normal preset button background color
+const PRESET_NORMAL_BG: Color = Color::srgb(0.2, 0.2, 0.3);
+/// Normal preset button border color
+const PRESET_NORMAL_BORDER: Color = Color::srgb(0.4, 0.4, 0.5);
+/// Selected preset button background color
+const PRESET_SELECTED_BG: Color = Color::srgb(0.2, 0.4, 0.2);
+/// Selected preset button border color
+const PRESET_SELECTED_BORDER: Color = Color::srgb(0.3, 0.6, 0.3);
+/// Hovered preset button background color
+const PRESET_HOVER_BG: Color = Color::srgb(0.25, 0.25, 0.4);
+/// Hovered preset button border color
+const PRESET_HOVER_BORDER: Color = Color::srgb(0.5, 0.5, 0.6);
+/// Pressed preset button background color
+const PRESET_PRESSED_BG: Color = Color::srgb(0.3, 0.5, 0.3);
+/// Pressed preset button border color
+const PRESET_PRESSED_BORDER: Color = Color::srgb(0.4, 0.7, 0.4);
 
 // --- Helper Functions ---
 
@@ -577,6 +614,32 @@ pub fn setup_selected_preset(mut commands: Commands) {
     });
 }
 
+/// System that synchronizes preset button highlighting based on the currently selected preset.
+/// This system reacts to changes in the SelectedPreset resource and updates all preset buttons
+/// to reflect the correct visual state (selected vs normal).
+pub fn sync_preset_button_highlights(
+    selected_preset: Res<SelectedPreset>,
+    mut preset_buttons: Query<(&PresetButton, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    if selected_preset.is_changed() {
+        let presets = PresetKind::all();
+        
+        for (preset_button, mut bg_color, mut border_color) in &mut preset_buttons {
+            if let Some(preset) = presets.get(preset_button.preset_id) {
+                if *preset == selected_preset.preset {
+                    // Apply selected styling
+                    *bg_color = BackgroundColor(PRESET_SELECTED_BG);
+                    *border_color = BorderColor(PRESET_SELECTED_BORDER);
+                } else {
+                    // Apply normal styling
+                    *bg_color = BackgroundColor(PRESET_NORMAL_BG);
+                    *border_color = BorderColor(PRESET_NORMAL_BORDER);
+                }
+            }
+        }
+    }
+}
+
 /// Initialize the camera once at startup.
 /// This is the only camera spawn in the application - created during the Loading state.
 pub fn setup_camera(mut commands: Commands) {
@@ -658,8 +721,8 @@ pub fn setup_customization_screen(mut commands: Commands) {
                                     border: UiRect::all(Val::Px(2.0)),
                                     ..default()
                                 },
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.3)),
-                                BorderColor(Color::srgb(0.4, 0.4, 0.5)),
+                                BackgroundColor(PRESET_NORMAL_BG),
+                                BorderColor(PRESET_NORMAL_BORDER),
                             ))
                             .with_children(|button_parent| {
                                 // Preset name
@@ -762,6 +825,8 @@ pub fn cleanup_game_screen(
 }
 
 /// System to handle preset button interactions and update the selected preset.
+/// This system only handles interaction states and updates the SelectedPreset resource.
+/// Visual highlighting is handled separately by sync_preset_button_highlights.
 pub fn handle_preset_selection(
     mut interaction_query: Query<(&Interaction, &PresetButton, &mut BackgroundColor, &mut BorderColor), Changed<Interaction>>,
     mut selected_preset: ResMut<SelectedPreset>,
@@ -776,29 +841,23 @@ pub fn handle_preset_selection(
                     println!("Selected preset: {:?}", new_preset);
                 }
                 
-                // Visual feedback - pressed state
-                *bg_color = BackgroundColor(Color::srgb(0.3, 0.5, 0.3));
-                *border_color = BorderColor(Color::srgb(0.4, 0.7, 0.4));
+                // Visual feedback - pressed state only
+                *bg_color = BackgroundColor(PRESET_PRESSED_BG);
+                *border_color = BorderColor(PRESET_PRESSED_BORDER);
             }
             Interaction::Hovered => {
-                // Hover effect
-                *bg_color = BackgroundColor(Color::srgb(0.25, 0.25, 0.4));
-                *border_color = BorderColor(Color::srgb(0.5, 0.5, 0.6));
-            }
-            Interaction::None => {
-                // Check if this is the currently selected preset
+                // Only apply hover if this button is not currently selected
                 let presets = PresetKind::all();
                 if let Some(preset) = presets.get(preset_button.preset_id) {
-                    if *preset == selected_preset.preset {
-                        // Selected preset styling
-                        *bg_color = BackgroundColor(Color::srgb(0.2, 0.4, 0.2));
-                        *border_color = BorderColor(Color::srgb(0.3, 0.6, 0.3));
-                    } else {
-                        // Normal styling
-                        *bg_color = BackgroundColor(Color::srgb(0.2, 0.2, 0.3));
-                        *border_color = BorderColor(Color::srgb(0.4, 0.4, 0.5));
+                    if *preset != selected_preset.preset {
+                        *bg_color = BackgroundColor(PRESET_HOVER_BG);
+                        *border_color = BorderColor(PRESET_HOVER_BORDER);
                     }
                 }
+            }
+            Interaction::None => {
+                // Don't set colors here - sync_preset_button_highlights handles this
+                // This allows proper state management through the SelectedPreset resource
             }
         }
     }
@@ -1237,6 +1296,9 @@ impl Plugin for UiPlugin {
                     
                     // Customization state systems
                     handle_preset_selection.run_if(in_state(AppState::Customization)),
+                    sync_preset_button_highlights
+                        .run_if(resource_changed::<SelectedPreset>)
+                        .run_if(in_state(AppState::Customization)),
                     update_settings_summary.run_if(in_state(AppState::Customization)),
                     update_start_button_colors.run_if(in_state(AppState::Customization)),
                     transition_to_game.run_if(in_state(AppState::Customization)),
