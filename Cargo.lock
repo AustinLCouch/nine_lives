@@ -2835,6 +2835,7 @@ dependencies = [
  "bevy",
  "nine_lives_core",
  "nine_lives_ui",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -250,15 +250,35 @@ pub fn add_controller(app: &mut App) {
 /// 4. Adding the controller layer (event handling)
 /// 5. Running the game loop
 pub fn run_game() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
+    let mut app = App::new();
+    
+    // Configure plugins for web or desktop
+    #[cfg(target_arch = "wasm32")]
+    {
+        app.add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Nine Lives: Cat Sudoku".to_string(),
+                resolution: (700., 800.).into(),
+                canvas: Some("#bevy".to_owned()),
+                ..default()
+            }),
+            ..default()
+        }));
+    }
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        app.add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Nine Lives: Cat Sudoku".to_string(),
                 resolution: (700., 800.).into(),
                 ..default()
             }),
             ..default()
-        }))
+        }));
+    }
+    
+    app
         // Initialize the core game state from the model layer
         .init_resource::<BoardState>()
         .init_resource::<GameState>()

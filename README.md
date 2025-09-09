@@ -4,6 +4,10 @@
 
 Built with Rust and Bevy, Nine Lives transforms the classic Sudoku experience with adorable ASCII cat art, professional-grade features, and delightful gameplay. Each number (1-9) is represented by a unique, detailed ASCII kitten design, bringing personality and charm to every puzzle.
 
+## 🌍 Play Online
+**[🎮 Play Nine Lives Cat Sudoku](https://austinlcouch.github.io/nine_lives/)**
+*Play instantly in your browser - no download required!*
+
 > 🎉 **Version 2.0.0**: Now featuring undo/redo, smart hints, theming, keyboard shortcuts, and comprehensive game state management!
 
 ## ✨ Features

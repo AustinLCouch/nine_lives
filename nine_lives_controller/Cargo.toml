@@ -7,7 +7,13 @@ edition = "2024"
 name = "nine_lives"
 path = "src/main.rs"
 
+[features]
+default = ["native"]
+native = ["bevy/default"]
+web = ["bevy/webgl2", "bevy/png"]
+
 [dependencies]
-bevy = "0.16.1"
+bevy = { version = "0.16.1", default-features = false, features = ["bevy_winit", "bevy_asset", "bevy_sprite", "bevy_ui"] }
 nine_lives_core = { path = "../nine_lives_core" }
 nine_lives_ui = { path = "../nine_lives_ui" }
+wasm-bindgen = { version = "0.2", optional = true }
