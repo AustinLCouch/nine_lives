@@ -1,8 +1,27 @@
-# UX Features Specification - Nine Lives Cat Sudoku
+# UX Features Specification
+
+> **Nine Lives Cat Sudoku** - User Experience Design Documentation
+
+This document defines the user experience specifications for Nine Lives Cat Sudoku, maintaining the playful cat theme while providing professional game features. Many of these features have been implemented in v2.0.0, with additional enhancements planned.
+
+## Related Documentation
+
+- **[MVC Overview](mvc_overview.md)** - Technical architecture and API contracts
+- **[Development Guide](../development/guide.md)** - Implementation guidelines
+- **[Future Roadmap](../changelog/roadmap.md)** - Planned UX enhancements
+- **[Visual Improvements](../changelog/visual_improvements.md)** - Recent visual enhancements
+- **[Main README](../../README.md)** - Current feature overview
+
+---
 
 ## Feature Overview
 
-This document defines the user experience specifications for advanced functionality in Nine Lives Cat Sudoku, maintaining the playful cat theme while adding professional game features.
+**Implementation Status** (v2.0.0):
+- ✅ **Completed**: Undo/Redo, Hints, Themes, Progress Tracking, Visual Feedback
+- 🔄 **Partially Implemented**: Some advanced animations and audio features pending
+- 📋 **Planned**: Persistence, advanced settings, mobile adaptations
+
+This specification covers both implemented features and future enhancements, maintaining the playful cat theme while adding professional game functionality.
 
 ## 1. Enhanced Game State Management
 

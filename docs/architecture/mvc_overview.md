@@ -1,6 +1,20 @@
-# Nine Lives Cat Sudoku - API Analysis & Contracts
+# MVC Architecture Overview
 
-## Current API Surface Analysis
+> **Nine Lives Cat Sudoku** - Model-View-Controller Architecture Documentation
+
+This document provides detailed analysis of the MVC architecture implementation, API contracts, and extension strategies for Nine Lives Cat Sudoku. The project follows strict architectural separation using separate Rust crates for each layer.
+
+## Related Documentation
+
+- **[Development Guide](../development/guide.md)** - Commands and development workflow
+- **[UX Specification](ux_specification.md)** - User experience design and features  
+- **[Testing Strategy](../development/testing.md)** - Testing approach across architectural layers
+- **[Future Roadmap](../changelog/roadmap.md)** - Planned architectural enhancements
+- **[Main WARP.md](../../WARP.md)** - Core architecture principles and crate structure
+
+---
+
+## Current API Surface Analysis (v2.0.0)
 
 ### nine_lives_core (Model Layer)
 

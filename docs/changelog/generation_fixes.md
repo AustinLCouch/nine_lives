@@ -1,5 +1,18 @@
 # Expert Puzzle Generation Improvements
 
+> **Technical Documentation** - Expert Difficulty Generation Algorithm Fix
+
+This document details the technical solution implemented to fix Expert difficulty puzzle generation, which had a 0% success rate prior to the v2.0.0 improvements.
+
+## Related Documentation
+
+- **[Main CHANGELOG](../../CHANGELOG.md)** - Complete v2.0.0 release notes
+- **[Future Roadmap](roadmap.md)** - Planned puzzle generation enhancements
+- **[MVC Overview](../architecture/mvc_overview.md)** - Core architecture and contracts
+- **[Testing Strategy](../development/testing.md)** - Generation algorithm testing
+
+---
+
 ## Problem Statement
 
 Prior to this fix, Expert difficulty puzzles had a **0% success rate** in generation. The `NightProwler` preset (Expert difficulty) would:
