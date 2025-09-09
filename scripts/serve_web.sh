@@ -17,10 +17,22 @@ if [ ! -f "web/nine_lives.js" ]; then
 fi
 
 echo "📁 Serving from 'web/' directory"
-echo "🌍 Open your browser to: http://localhost:8080"
 echo "🛑 Press Ctrl+C to stop the server"
 echo ""
 
+# Function to find an available port
+find_available_port() {
+    local port=$1
+    while lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; do
+        port=$((port + 1))
+    done
+    echo $port
+}
+
+# Find an available port starting from 8080
+PORT=$(find_available_port 8080)
+echo "🌍 Open your browser to: http://localhost:$PORT"
+
 # Start Python HTTP server in the web directory
 cd web
-python3 -m http.server 8080
+python3 -m http.server $PORT
